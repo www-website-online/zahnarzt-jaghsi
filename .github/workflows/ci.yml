@@ -1,0 +1,25 @@
+name: Run tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (if any)
+        run: |
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+
+      - name: Run unit tests
+        run: |
+          # Ensure CI uses local repo code for imports and subprocesses
+          export PYTHONPATH="$GITHUB_WORKSPACE:$PYTHONPATH"
+          # (Optional) remove any installed package that might shadow local code
+          pip uninstall -y reposmith-tol || true
+          python -m unittest discover -s tests -v

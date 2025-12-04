@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Kontakt & Sprechzeiten{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <h1>Kontakt & Sprechzeiten</h1>
+    <p>
+        Vereinbaren Sie Ihren Termin telefonisch oder schreiben Sie uns eine Nachricht. 
+        Neue Patientinnen und Patienten sind herzlich willkommen.
+    </p>
+</section>
+
+<section class="two-column">
+    <div class="column">
+        <div class="card">
+            <h2>Sprechzeiten</h2>
+            <p>Mo, Di, Do: 09:00 – 18:00 Uhr</p>
+            <p>Mi, Fr: 09:00 – 15:00 Uhr</p>
+        </div>
+
+        <div class="card">
+            <h2>Kontakt</h2>
+            <p><strong>Telefon:</strong> {{ phone_landline }}</p>
+            <p><strong>Mobil:</strong> {{ phone_mobile }}</p>
+            <p><strong>Adresse:</strong><br />{{ address }}</p>
+            <a class="link" href="https://maps.google.com/?q=Karl-Marx-Straße+214+12055+Berlin" target="_blank">
+                Route in Google Maps öffnen
+            </a>
+        </div>
+    </div>
+
+    <div class="column">
+        <div class="card">
+            <h2>Kontaktformular</h2>
+            <p>
+                Wenn Sie möchten, können Sie uns eine Nachricht schicken. 
+                Wir melden uns so schnell wie möglich bei Ihnen.
+            </p>
+            <form class="contact-form" method="post" action="#">
+                <label for="name">Name</label>
+                <input id="name" name="name" type="text" required />
+
+                <label for="email">E-Mail</label>
+                <input id="email" name="email" type="email" required />
+
+                <label for="message">Nachricht</label>
+                <textarea id="message" name="message" rows="4" required></textarea>
+
+                <button type="submit" class="btn-primary">Nachricht senden</button>
+            </form>
+            <p class="form-hint">
+                Hinweis: Das Kontaktformular ist aktuell ein Platzhalter. 
+                Die technische Anbindung (z.B. E-Mail-Versand) kann später ergänzt werden.
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}
