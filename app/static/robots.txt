@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://zahnarzt-jaghsi.de/static/sitemap.xml
