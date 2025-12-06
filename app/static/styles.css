@@ -295,8 +295,8 @@ a {
 /* Logo image */
 
 .logo-img {
-    width: 56px;
-    height: 56px;
+    width: 20px;
+    height: 20px;
     object-fit: contain;
     display: block;
 }
