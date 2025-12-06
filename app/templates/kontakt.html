@@ -24,12 +24,11 @@
             <p><strong>Mobil:</strong> {{ phone_mobile }}</p>
             <p><strong>Adresse:</strong><br />{{ address }}</p>
 
-<a class="link"
-   href="https://www.google.com/maps/place/%D8%AF%D9%83%D8%AA%D9%88%D8%B1+%D8%A7%D9%84%D8%A3%D8%B3%D9%86%D8%A7%D9%86+%D8%B9%D8%A8%D8%AF+%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2+%D8%AC%D8%BA%D8%B5%D9%8A%E2%80%AD/@52.4707366,13.4411629,17z/data=!3m1!4b1!4m6!3m5!1s0x47a84ff2c86a0db9:0x65a0a118fc7cc1a5!8m2!3d52.4707366!4d13.4411629!16s%2Fg%2F11ln_590cn?entry=ttu&amp;g_ep=EgoyMDI1MTIwMi4wIKXMDSoASAFQAw%3D%3D"
-   target="_blank" rel="noopener noreferrer">
-    Route in Google Maps öffnen
-</a>
-
+            <a class="link"
+               href="https://www.google.com/maps/place/%D8%AF%D9%83%D8%AA%D9%88%D8%B1+%D8%A7%D9%84%D8%A3%D8%B3%D9%86%D8%A7%D9%86+%D8%B9%D8%A8%D8%AF+%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2+%D8%AC%D8%BA%D8%B5%D9%8A%E2%80%AD/@52.4707366,13.4411629,17z"
+               target="_blank" rel="noopener noreferrer">
+                Route in Google Maps öffnen
+            </a>
         </div>
 
     </div>
@@ -41,22 +40,31 @@
                 Wenn Sie möchten, können Sie uns eine Nachricht schicken. 
                 Wir melden uns so schnell wie möglich bei Ihnen.
             </p>
-            <form class="contact-form" method="post" action="#">
-                <label for="name">Name</label>
-                <input id="name" name="name" type="text" required />
 
-                <label for="email">E-Mail</label>
-                <input id="email" name="email" type="email" required />
+            <!-- بدل الفورم القديم -->
+            <div class="contact-form">
+                <label>Name</label>
+                <input type="text" placeholder="Ihr Name" disabled>
 
-                <label for="message">Nachricht</label>
-                <textarea id="message" name="message" rows="4" required></textarea>
+                <label>E-Mail</label>
+                <input type="email" placeholder="Ihre E-Mail" disabled>
 
-                <button type="submit" class="btn-primary">Nachricht senden</button>
-            </form>
+                <label>Nachricht</label>
+                <textarea rows="4" placeholder="Ihre Nachricht" disabled></textarea>
+
+                <!-- زر mailto -->
+                <a href="mailto:info@zahnarzt-jaghsi.de?subject=Kontaktanfrage%20von%20Website"
+                   class="btn-primary"
+                   style="text-align:center; display:block;">
+                    Nachricht senden
+                </a>
+            </div>
+
             <p class="form-hint">
-                Hinweis: Das Kontaktformular ist aktuell ein Platzhalter. 
-                Die technische Anbindung (z.B. E-Mail-Versand) kann später ergänzt werden.
+                Hinweis: Die Nachricht wird über Ihr eigenes E-Mail-Programm gesendet.
+                Keine Daten werden auf dem Server gespeichert.
             </p>
+
         </div>
     </div>
 </section>
