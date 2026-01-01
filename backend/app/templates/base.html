@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <title>{{ clinic_name }}{% block title_suffix %}{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/styles.css?v=3" />
+
+</head>
+<body>
+<header class="header">
+    <div class="container header-inner">
+        <div class="logo">
+            <img src="/static/logo.png" alt="Praxis Logo" class="logo-img">
+            <div>
+                <div class="logo-title">ZAHNARZTPRAXIS</div>
+                <div class="logo-subtitle">M.Sc. Abdulaziz Jaghsi</div>
+            </div>
+        </div>
+
+        <nav class="nav">
+            <a href="/">Startseite</a>
+            <a href="/leistungen">Leistungen</a>
+            <a href="/ueber-uns">Über uns</a>
+        </nav>
+
+        <a class="btn-primary"
+           href="https://www.doctolib.de/zahnmedizin/berlin/abdulaziz-jaghsi"
+           target="_blank">
+            Termin online buchen
+        </a>
+    </div>
+</header>
+
+
+<main class="main">
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+<footer class="footer">
+    <div class="container footer-inner">
+        <div>{{ clinic_name }}</div>
+        <div>{{ address }}</div>
+        <div>Tel: {{ phone_landline }} · Mobil: {{ phone_mobile }}</div>
+    </div>
+</footer>
+</body>
+</html>
