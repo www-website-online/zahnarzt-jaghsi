@@ -14,7 +14,7 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 CLINIC_NAME = os.getenv("CLINIC_NAME", "ZAHNARZTPRAXIS – M.Sc. Abdulaziz Jaghsi")
 ADDRESS = os.getenv("CLINIC_ADDRESS", "Karl-Marx-Straße 214, 12055 Berlin")
 PHONE_LANDLINE = os.getenv("CLINIC_PHONE_LANDLINE", "(030) 685 10 44")
-PHONE_MOBILE = os.getenv("CLINIC_PHONE_MOBILE", "015650 555345")
+PHONE_MOBILE = os.getenv("CLINIC_PHONE_MOBILE", "015560 555345")
 
 
 def base_context(request: Request) -> dict:
@@ -31,22 +31,22 @@ def base_context(request: Request) -> dict:
 @app.get("/")
 def startseite(request: Request):
     ctx = base_context(request)
-    return templates.TemplateResponse("index.html", ctx)
+    return templates.TemplateResponse(request, "index.html", ctx)
 
 
 @app.get("/leistungen")
 def leistungen(request: Request):
     ctx = base_context(request)
-    return templates.TemplateResponse("leistungen.html", ctx)
+    return templates.TemplateResponse(request, "leistungen.html", ctx)
 
 
 @app.get("/ueber-uns")
 def ueber_uns(request: Request):
     ctx = base_context(request)
-    return templates.TemplateResponse("ueber_uns.html", ctx)
+    return templates.TemplateResponse(request, "ueber_uns.html", ctx)
 
 
 @app.get("/kontakt")
 def kontakt(request: Request):
     ctx = base_context(request)
-    return templates.TemplateResponse("kontakt.html", ctx)
+    return templates.TemplateResponse(request, "kontakt.html", ctx)

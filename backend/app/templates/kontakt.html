@@ -1,87 +1,76 @@
 {% extends "base.html" %}
 {% block title_suffix %} – Kontakt{% endblock %}
 
-{% block meta_description %}
-Kontakt zur Zahnarztpraxis M.Sc. Abdulaziz Jaghsi in Berlin-Neukölln:
-Adresse, Telefonnummer, E-Mail und Online-Terminvergabe über Doctolib.
-{% endblock %}
-
 {% block content %}
 <section class="page-header">
-    <h1>Kontakt</h1>
+    <h1>Kontakt & Termin</h1>
     <p>
-        Sie möchten einen Termin vereinbaren oder haben eine Frage?
-        Schreiben Sie uns über das Formular oder rufen Sie direkt in der Praxis an.
+        Sie möchten einen Termin vereinbaren oder haben eine Frage zu einer Behandlung?
+        Wir beraten Sie gerne persönlich.
     </p>
 </section>
 
 <section class="two-column">
     <div class="column">
-        <h2>Kontaktformular</h2>
+        <div class="contact-form-wrap">
+            <h2>Kontaktformular</h2>
 
-        {% if success %}
+            {% if success %}
+                <p class="form-success">Vielen Dank. Ihre Nachricht wurde erfolgreich gesendet.</p>
+            {% endif %}
+
+            <form class="contact-form" method="post" action="/kontakt">
+                <label>
+                    Ihr Name
+                    <input type="text" name="name" required>
+                </label>
+
+                <label>
+                    E-Mail
+                    <input type="email" name="email" required>
+                </label>
+
+                <label>
+                    Ihre Nachricht
+                    <textarea name="message" rows="5" required></textarea>
+                </label>
+
+                <button class="btn-primary" type="submit">Nachricht senden</button>
+            </form>
+
             <p class="form-hint">
-                Vielen Dank für Ihre Nachricht, wir melden uns baldmöglichst bei Ihnen.
+                Bitte senden Sie keine Notfälle per E-Mail. In dringenden Fällen rufen Sie uns direkt an.
             </p>
-        {% endif %}
-
-        <form class="contact-form" method="post" action="/kontakt">
-            <label>
-                Ihr Name
-                <input type="text" name="name" required>
-            </label>
-
-            <label>
-                E-Mail
-                <input type="email" name="email" required>
-            </label>
-
-            <label>
-                Ihre Nachricht
-                <textarea name="message" rows="4" required></textarea>
-            </label>
-
-            <button class="btn-primary" type="submit">Nachricht senden</button>
-        </form>
-
-        <p class="form-hint">
-            Hinweis: Bitte senden Sie <strong>keine Notfälle</strong> per E-Mail.
-            In dringenden Fällen wenden Sie sich bitte telefonisch oder an den zahnärztlichen Notdienst.
-        </p>
+        </div>
     </div>
 
     <div class="column">
-        <div class="info-box">
+        <article class="info-box">
             <h3>Praxisdaten</h3>
             <p><strong>{{ clinic_name }}</strong></p>
             <p>{{ address }}</p>
             <p>Tel: {{ phone_landline }}<br>Mobil: {{ phone_mobile }}</p>
-        </div>
+        </article>
 
-        <div class="info-box">
+        <article class="info-box">
             <h3>Online-Termin</h3>
-            <p>
-                Buchen Sie Ihren Termin bequem online über Doctolib.
-            </p>
+            <p>Buchen Sie Ihren Termin bequem online über Doctolib.</p>
             <a class="btn-secondary"
                href="https://www.doctolib.de/zahnmedizin/berlin/abdulaziz-jaghsi"
                target="_blank" rel="noopener noreferrer">
                 Termin online buchen
             </a>
-        </div>
+        </article>
 
-        <div class="info-box">
+        <article class="info-box">
             <h3>Anfahrt</h3>
-            <p>
-                Karl-Marx-Straße 214<br>
-                12055 Berlin-Neukölln
-            </p>
+            <p>Karl-Marx-Straße 214<br>12055 Berlin-Neukölln</p>
             <a class="link"
                href="https://www.google.com/maps/place/%D8%AF%D9%83%D8%AA%D9%88%D8%B1+%D8%A7%D9%84%D8%A3%D8%B3%D9%86%D8%A7%D9%86+%D8%B9%D8%A8%D8%AF+%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2+%D8%AC%D8%BA%D8%B5%D9%8A%E2%80%AD/@52.4707366,13.4411629,17z"
                target="_blank" rel="noopener noreferrer">
                 Route in Google Maps öffnen
             </a>
-        </div>
+        </article>
     </div>
 </section>
 {% endblock %}
