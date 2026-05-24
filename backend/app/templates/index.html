@@ -65,30 +65,12 @@
 </section>
 
 <section class="clinic-gallery" aria-label="Clinic gallery">
-    <button class="gallery-item" type="button" data-full="/static/gallery/praxis-empfang.svg" data-alt="{{ t.gallery_i1 }}">
-        <img src="/static/gallery/praxis-empfang.svg" alt="{{ t.gallery_i1 }}" loading="lazy" width="1600" height="1000">
-        <span>{{ t.gallery_i1 }}</span>
+    {% for image in gallery_images %}
+    <button class="gallery-item" type="button" data-slot="{{ image.slot }}" data-full="{{ image.full }}" data-alt="{{ image.alt }}">
+        <img src="{{ image.src }}" {% if image.srcset %}srcset="{{ image.srcset }}" sizes="(max-width: 640px) 100vw, (max-width: 980px) 50vw, 33vw"{% endif %} alt="{{ image.alt }}" loading="lazy" width="1600" height="1000">
+        <span>{{ image.alt }}</span>
     </button>
-    <button class="gallery-item" type="button" data-full="/static/gallery/behandlung-raum.svg" data-alt="{{ t.gallery_i2 }}">
-        <img src="/static/gallery/behandlung-raum.svg" alt="{{ t.gallery_i2 }}" loading="lazy" width="1600" height="1000">
-        <span>{{ t.gallery_i2 }}</span>
-    </button>
-    <button class="gallery-item" type="button" data-full="/static/gallery/team-beratung.svg" data-alt="{{ t.gallery_i3 }}">
-        <img src="/static/gallery/team-beratung.svg" alt="{{ t.gallery_i3 }}" loading="lazy" width="1600" height="1000">
-        <span>{{ t.gallery_i3 }}</span>
-    </button>
-    <button class="gallery-item" type="button" data-full="/static/gallery/technik-digital.svg" data-alt="{{ t.gallery_i4 }}">
-        <img src="/static/gallery/technik-digital.svg" alt="{{ t.gallery_i4 }}" loading="lazy" width="1600" height="1000">
-        <span>{{ t.gallery_i4 }}</span>
-    </button>
-    <button class="gallery-item" type="button" data-full="/static/gallery/prophylaxe.svg" data-alt="{{ t.gallery_i5 }}">
-        <img src="/static/gallery/prophylaxe.svg" alt="{{ t.gallery_i5 }}" loading="lazy" width="1600" height="1000">
-        <span>{{ t.gallery_i5 }}</span>
-    </button>
-    <button class="gallery-item" type="button" data-full="/static/gallery/wartebereich.svg" data-alt="{{ t.gallery_i6 }}">
-        <img src="/static/gallery/wartebereich.svg" alt="{{ t.gallery_i6 }}" loading="lazy" width="1600" height="1000">
-        <span>{{ t.gallery_i6 }}</span>
-    </button>
+    {% endfor %}
 </section>
 
 <dialog class="lightbox" id="gallery-lightbox">
@@ -103,19 +85,53 @@
     const lightbox = document.getElementById('gallery-lightbox');
     if (!items.length || !lightbox) return;
 
+    const groups = {{ gallery_groups|tojson }};
     const image = lightbox.querySelector('.lightbox-image');
     const caption = lightbox.querySelector('.lightbox-caption');
     const closeBtn = lightbox.querySelector('.lightbox-close');
 
+    const navWrap = document.createElement('div');
+    navWrap.className = 'lightbox-nav';
+    navWrap.innerHTML = '<button type="button" class="btn-secondary prev">‹</button><button type="button" class="btn-secondary next">›</button>';
+    lightbox.appendChild(navWrap);
+
+    const prevBtn = navWrap.querySelector('.prev');
+    const nextBtn = navWrap.querySelector('.next');
+
+    let current = [];
+    let idx = 0;
+
+    function render() {
+        if (!current.length) return;
+        const img = current[idx];
+        image.src = img.full;
+        image.alt = img.alt || '';
+        caption.textContent = img.alt || '';
+        const many = current.length > 1;
+        prevBtn.style.display = many ? 'inline-flex' : 'none';
+        nextBtn.style.display = many ? 'inline-flex' : 'none';
+    }
+
     items.forEach((item) => {
         item.addEventListener('click', () => {
-            const full = item.getAttribute('data-full');
-            const alt = item.getAttribute('data-alt') || '';
-            image.src = full;
-            image.alt = alt;
-            caption.textContent = alt;
+            const slot = item.getAttribute('data-slot') || '';
+            current = groups[slot] || [{ full: item.getAttribute('data-full'), alt: item.getAttribute('data-alt') || '' }];
+            idx = 0;
+            render();
             lightbox.showModal();
         });
+    });
+
+    prevBtn.addEventListener('click', () => {
+        if (!current.length) return;
+        idx = (idx - 1 + current.length) % current.length;
+        render();
+    });
+
+    nextBtn.addEventListener('click', () => {
+        if (!current.length) return;
+        idx = (idx + 1) % current.length;
+        render();
     });
 
     closeBtn.addEventListener('click', () => lightbox.close());

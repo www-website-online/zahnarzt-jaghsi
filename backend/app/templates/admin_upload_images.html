@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Admin Upload{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <h1>Image Upload Admin</h1>
+    <p>Logged in as <strong>{{ admin_user }}</strong>. Upload images to a fixed section and choose one as the main cover.</p>
+</section>
+
+<section class="two-column">
+    <div class="column">
+        <article class="contact-form-wrap">
+            <h3>Upload Section Images</h3>
+            <form class="contact-form" method="post" action="/admin/upload-images?lang={{ lang }}&section={{ selected_section }}" enctype="multipart/form-data">
+                <label>
+                    Section (fixed slot)
+                    <select name="section" required>
+                        {% for slot in gallery_slots %}
+                        <option value="{{ slot.key }}" {% if selected_section == slot.key %}selected{% endif %}>{{ slot.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>
+                    German title (optional)
+                    <input type="text" name="title_de" placeholder="Praxis Empfang">
+                </label>
+                <label>
+                    Arabic title (optional)
+                    <input type="text" name="title_ar" placeholder="منطقة الاستقبال">
+                </label>
+                <label>
+                    Image(s) (JPG/PNG/WEBP, max {{ 10 }}MB each)
+                    <input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple required>
+                </label>
+                <button class="btn-primary" type="submit">Upload & Optimize</button>
+            </form>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem;">
+                <form method="post" action="/admin/upload-images/delete-section?lang={{ lang }}&section={{ selected_section }}">
+                    <input type="hidden" name="section" value="{{ selected_section }}">
+                    <button class="btn-secondary" type="submit" style="width:100%;">Delete Section Images</button>
+                </form>
+                <form method="post" action="/admin/upload-images/delete-all?lang={{ lang }}&section={{ selected_section }}" onsubmit="return confirm('Delete all uploaded images?');">
+                    <button class="btn-secondary" type="submit" style="width:100%;">Delete All Uploaded</button>
+                </form>
+            </div>
+
+            {% if upload_success %}
+                <p class="form-success" style="margin-top:0.8rem;">{{ upload_success }}</p>
+            {% endif %}
+
+            {% for err in upload_errors %}
+                <p class="form-hint" style="color:#b42318;">{{ err }}</p>
+            {% endfor %}
+        </article>
+
+        <article class="info-box">
+            <h3>View Section Images</h3>
+            <form class="contact-form" method="get" action="/admin/upload-images">
+                <input type="hidden" name="lang" value="{{ lang }}">
+                <label>
+                    Section to display
+                    <select name="section" required>
+                        {% for slot in gallery_slots %}
+                        <option value="{{ slot.key }}" {% if selected_section == slot.key %}selected{% endif %}>{{ slot.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button class="btn-secondary" type="submit">Show This Section</button>
+            </form>
+        </article>
+
+        <article class="info-box">
+            <h3>Section Images ({{ selected_section }})</h3>
+            {% if section_images %}
+            <div style="display:grid;gap:.65rem;">
+                {% for img in section_images %}
+                <div style="display:grid;grid-template-columns:92px 1fr;gap:.7rem;align-items:center;border:1px solid var(--line);border-radius:.8rem;padding:.55rem;background:#fff;">
+                    <img src="{{ img.thumb }}" alt="{{ img.alt }}" style="width:92px;height:58px;object-fit:cover;border-radius:.45rem;display:block;">
+                    <div>
+                        <div style="font-weight:700;font-size:.92rem;">{{ img.alt }}</div>
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem;">
+                            {% if img.is_main %}
+                            <span class="btn-secondary" style="padding:.32rem .55rem;min-height:auto;">Main</span>
+                            {% else %}
+                            <form method="post" action="/admin/upload-images/set-main?lang={{ lang }}&section={{ selected_section }}">
+                                <input type="hidden" name="section" value="{{ selected_section }}">
+                                <input type="hidden" name="image_id" value="{{ img.id }}">
+                                <button class="btn-secondary" type="submit" style="padding:.32rem .55rem;min-height:auto;">Set as Main</button>
+                            </form>
+                            {% endif %}
+                            <form method="post" action="/admin/upload-images/delete-image?lang={{ lang }}&section={{ selected_section }}" onsubmit="return confirm('Delete this image?');">
+                                <input type="hidden" name="section" value="{{ selected_section }}">
+                                <input type="hidden" name="image_id" value="{{ img.id }}">
+                                <button class="btn-secondary" type="submit" style="padding:.32rem .55rem;min-height:auto;">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="form-hint">No uploaded images in this section yet.</p>
+            {% endif %}
+        </article>
+    </div>
+
+    <div class="column">
+        <article class="info-box">
+            <h3>How it works</h3>
+            <ul>
+                <li>Each section can have multiple images</li>
+                <li>Choose one image as main cover for homepage</li>
+                <li>Main image appears in section slot on homepage</li>
+                <li>You can delete one image or whole section images</li>
+            </ul>
+        </article>
+    </div>
+</section>
+{% endblock %}

@@ -1,22 +1,46 @@
+import json
 import os
-from fastapi import FastAPI, Request
+import re
+import secrets
+import time
+import uuid
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+GALLERY_DIR = STATIC_DIR / "gallery"
+RUNTIME_UPLOAD_ROOT = Path("/tmp/zahnarzt-gallery")
+OPTIMIZED_DIR = RUNTIME_UPLOAD_ROOT / "optimized"
+MANIFEST_PATH = RUNTIME_UPLOAD_ROOT / "manifest.json"
 
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+RUNTIME_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+OPTIMIZED_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/uploads", StaticFiles(directory=str(RUNTIME_UPLOAD_ROOT)), name="uploads")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 CLINIC_NAME = os.getenv("CLINIC_NAME", "ZAHNARZTPRAXIS – M.Sc. Abdulaziz Jaghsi")
 ADDRESS = os.getenv("CLINIC_ADDRESS", "Karl-Marx-Straße 214, 12055 Berlin")
 PHONE_LANDLINE = os.getenv("CLINIC_PHONE_LANDLINE", "(030) 685 10 44")
 PHONE_MOBILE = os.getenv("CLINIC_PHONE_MOBILE", "015560 555345")
 
+ADMIN_USER = os.getenv("ADMIN_UPLOAD_USER", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_UPLOAD_PASSWORD", "ChangeMeNow123!")
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
 SUPPORTED_LANGS = {"de", "ar"}
 DEFAULT_LANG = "de"
+
+security = HTTPBasic()
 
 I18N = {
     "de": {
@@ -54,7 +78,7 @@ I18N = {
         "home_c3_h": "Kurze Wege, klare Abläufe",
         "home_c3_p": "Direkte Terminbuchung, gute Erreichbarkeit und verständliche Aufklärung sorgen für einen entspannten Praxisbesuch.",
         "gallery_h": "Einblicke in unsere Praxis",
-        "gallery_p": "Professionelle Galerie mit Beispielbildern. Ersetzen Sie diese Platzhalter durch echte Praxisfotos in /static/gallery.",
+        "gallery_p": "Professionelle Galerie mit Beispielbildern. Neue Bilder können im Admin-Bereich hochgeladen werden.",
         "gallery_zoom": "Bild vergrößern",
         "gallery_i1": "Empfangsbereich",
         "gallery_i2": "Behandlungsraum",
@@ -161,7 +185,7 @@ I18N = {
         "home_c3_h": "خطوات واضحة",
         "home_c3_p": "حجز مباشر، سهولة وصول، وشرح مفهوم قبل العلاج لتجربة أكثر راحة.",
         "gallery_h": "جولة داخل العيادة",
-        "gallery_p": "معرض احترافي بصور تجريبية. يمكن استبدالها لاحقًا بصور العيادة الحقيقية داخل /static/gallery.",
+        "gallery_p": "معرض احترافي. يمكن رفع صور جديدة ومعالجتها تلقائيًا من لوحة الإدارة.",
         "gallery_zoom": "تكبير الصورة",
         "gallery_i1": "منطقة الاستقبال",
         "gallery_i2": "غرفة العلاج",
@@ -236,9 +260,282 @@ I18N = {
 }
 
 
+GALLERY_SLOTS = [
+    {"key": "reception", "src": "/static/gallery/praxis-empfang.svg", "label_key": "gallery_i1"},
+    {"key": "treatment", "src": "/static/gallery/behandlung-raum.svg", "label_key": "gallery_i2"},
+    {"key": "team", "src": "/static/gallery/team-beratung.svg", "label_key": "gallery_i3"},
+    {"key": "digital", "src": "/static/gallery/technik-digital.svg", "label_key": "gallery_i4"},
+    {"key": "prophylaxis", "src": "/static/gallery/prophylaxe.svg", "label_key": "gallery_i5"},
+    {"key": "waiting", "src": "/static/gallery/wartebereich.svg", "label_key": "gallery_i6"},
+]
+
+SLOT_KEYS = {slot["key"] for slot in GALLERY_SLOTS}
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+TARGET_SIZES = [480, 800, 1200, 1600]
+
+
 def get_lang(request: Request) -> str:
     lang = request.query_params.get("lang", DEFAULT_LANG).lower()
     return lang if lang in SUPPORTED_LANGS else DEFAULT_LANG
+
+
+def sanitize_stem(name: str) -> str:
+    stem = Path(name).stem.lower()
+    stem = re.sub(r"[^a-z0-9_-]+", "-", stem).strip("-")
+    return stem or f"image-{int(time.time())}"
+
+
+def _to_image_item(raw: dict, section: str) -> dict:
+    image_id = raw.get("id") or raw.get("image_id") or f"{section}-{uuid.uuid4().hex[:10]}"
+    return {
+        "id": image_id,
+        "section": section,
+        "title_de": raw.get("title_de", ""),
+        "title_ar": raw.get("title_ar", ""),
+        "full_url": raw.get("full_url", ""),
+        "thumb_url": raw.get("thumb_url", raw.get("full_url", "")),
+        "srcset": raw.get("srcset", ""),
+        "created_at": raw.get("created_at", int(time.time())),
+    }
+
+
+def load_manifest() -> dict[str, dict]:
+    if not MANIFEST_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    if isinstance(raw, list):
+        migrated: dict[str, dict] = {}
+        for idx, item in enumerate(raw):
+            if idx >= len(GALLERY_SLOTS):
+                break
+            section = GALLERY_SLOTS[idx]["key"]
+            image_item = _to_image_item(item, section)
+            migrated[section] = {"main_image_id": image_item["id"], "images": [image_item]}
+        return migrated
+
+    if not isinstance(raw, dict):
+        return {}
+
+    normalized: dict[str, dict] = {}
+    for section, value in raw.items():
+        if section not in SLOT_KEYS:
+            continue
+
+        if isinstance(value, dict) and isinstance(value.get("images"), list):
+            images = [_to_image_item(img, section) for img in value.get("images", []) if isinstance(img, dict)]
+            main_image_id = value.get("main_image_id")
+            if images and not any(img["id"] == main_image_id for img in images):
+                main_image_id = images[0]["id"]
+            normalized[section] = {"main_image_id": main_image_id, "images": images}
+        elif isinstance(value, dict):
+            image_item = _to_image_item(value, section)
+            normalized[section] = {"main_image_id": image_item["id"], "images": [image_item]}
+
+    return normalized
+
+
+def save_manifest(items: dict[str, dict]) -> None:
+    MANIFEST_PATH.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def get_gallery_slots(lang: str) -> list[dict]:
+    return [{"key": slot["key"], "label": I18N[lang][slot["label_key"]]} for slot in GALLERY_SLOTS]
+
+
+def _get_main_image(section_data: dict | None) -> dict | None:
+    if not section_data:
+        return None
+    images = section_data.get("images", [])
+    if not images:
+        return None
+    main_id = section_data.get("main_image_id")
+    for img in images:
+        if img.get("id") == main_id:
+            return img
+    return images[0]
+
+
+def load_gallery_images(lang: str) -> list[dict]:
+    manifest = load_manifest()
+    result = []
+    for slot in GALLERY_SLOTS:
+        key = slot["key"]
+        section_data = manifest.get(key)
+        main_image = _get_main_image(section_data)
+        if main_image:
+            result.append(
+                {
+                    "slot": key,
+                    "src": main_image.get("thumb_url", main_image.get("full_url", slot["src"])),
+                    "full": main_image.get("full_url", slot["src"]),
+                    "srcset": main_image.get("srcset", ""),
+                    "alt": main_image.get("title_ar") if lang == "ar" else main_image.get("title_de"),
+                }
+            )
+        else:
+            result.append(
+                {
+                    "slot": key,
+                    "src": slot["src"],
+                    "full": slot["src"],
+                    "srcset": "",
+                    "alt": I18N[lang][slot["label_key"]],
+                }
+            )
+    return result
+
+
+def get_gallery_groups(lang: str) -> dict[str, list[dict]]:
+    manifest = load_manifest()
+    groups: dict[str, list[dict]] = {}
+    for slot in GALLERY_SLOTS:
+        key = slot["key"]
+        section_data = manifest.get(key, {})
+        images = section_data.get("images", [])
+        if images:
+            groups[key] = [
+                {
+                    "full": img.get("full_url", slot["src"]),
+                    "alt": img.get("title_ar") if lang == "ar" else img.get("title_de") or I18N[lang][slot["label_key"]],
+                }
+                for img in images
+            ]
+        else:
+            groups[key] = [{"full": slot["src"], "alt": I18N[lang][slot["label_key"]]}]
+    return groups
+
+
+def get_section_gallery(lang: str, section: str) -> list[dict]:
+    manifest = load_manifest()
+    section_data = manifest.get(section, {})
+    images = section_data.get("images", [])
+    main_id = section_data.get("main_image_id")
+    rows = []
+    for img in images:
+        rows.append(
+            {
+                "id": img.get("id"),
+                "thumb": img.get("thumb_url", img.get("full_url", "")),
+                "full": img.get("full_url", ""),
+                "alt": img.get("title_ar") if lang == "ar" else img.get("title_de"),
+                "is_main": img.get("id") == main_id,
+            }
+        )
+    return rows
+
+
+def verify_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+    valid_user = secrets.compare_digest(credentials.username, ADMIN_USER)
+    valid_pass = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+    if not (valid_user and valid_pass):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+def _delete_optimized_files(item: dict) -> None:
+    urls = [item.get("full_url", ""), item.get("thumb_url", ""), *[u.strip().split(" ")[0] for u in item.get("srcset", "").split(",") if u.strip()]]
+    seen = set()
+    for url in urls:
+        if not url.startswith("/uploads/optimized/"):
+            continue
+        name = url.split("/uploads/optimized/")[-1]
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        fp = OPTIMIZED_DIR / name
+        if fp.exists() and fp.is_file():
+            fp.unlink()
+
+
+def _render_admin_page(request: Request, user: str, selected_section: str = "reception", upload_success: str | None = None, upload_errors: list[str] | None = None) -> object:
+    if selected_section not in SLOT_KEYS:
+        selected_section = "reception"
+
+    ctx = base_context(request)
+    ctx.update(
+        {
+            "admin_user": user,
+            "upload_success": upload_success,
+            "upload_errors": upload_errors or [],
+            "selected_section": selected_section,
+            "section_images": get_section_gallery(ctx["lang"], selected_section),
+        }
+    )
+    return templates.TemplateResponse(request, "admin_upload_images.html", ctx)
+
+
+def process_upload_image(file: UploadFile, section: str, title_de: str | None = None, title_ar: str | None = None) -> dict:
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Unsupported extension for {file.filename}")
+    if file.content_type not in ALLOWED_TYPES:
+        raise ValueError(f"Unsupported content type for {file.filename}")
+
+    content = file.file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"{file.filename} exceeds {MAX_UPLOAD_MB}MB")
+
+    try:
+        from PIL import Image, ImageOps
+    except ImportError as exc:
+        raise RuntimeError("Pillow is not installed") from exc
+
+    from io import BytesIO
+
+    try:
+        image = Image.open(BytesIO(content))
+        image = ImageOps.exif_transpose(image).convert("RGB")
+    except Exception as exc:
+        raise ValueError(f"Invalid image file: {file.filename}") from exc
+
+    stem = sanitize_stem(file.filename or "image")
+    unique = f"{stem}-{int(time.time())}"
+
+    width, height = image.size
+    generated = []
+    for size in TARGET_SIZES:
+        if size > width:
+            continue
+        new_height = int((size / width) * height)
+        resized = image.resize((size, new_height))
+        out_name = f"{unique}-{size}.webp"
+        out_path = OPTIMIZED_DIR / out_name
+        resized.save(out_path, "WEBP", quality=82, method=6)
+        generated.append((size, out_name))
+
+    if not generated:
+        out_name = f"{unique}-{width}.webp"
+        out_path = OPTIMIZED_DIR / out_name
+        image.save(out_path, "WEBP", quality=82, method=6)
+        generated.append((width, out_name))
+
+    generated.sort(key=lambda x: x[0])
+    full_name = generated[-1][1]
+    thumb_name = generated[0][1]
+    srcset = ", ".join([f"/uploads/optimized/{name} {size}w" for size, name in generated])
+
+    pretty = sanitize_stem(file.filename or "image").replace("-", " ").title()
+
+    return {
+        "id": f"{section}-{uuid.uuid4().hex[:10]}",
+        "section": section,
+        "title_de": title_de or pretty,
+        "title_ar": title_ar or pretty,
+        "full_url": f"/uploads/optimized/{full_name}",
+        "thumb_url": f"/uploads/optimized/{thumb_name}",
+        "srcset": srcset,
+        "created_at": int(time.time()),
+    }
 
 
 def base_context(request: Request) -> dict:
@@ -252,6 +549,9 @@ def base_context(request: Request) -> dict:
         "lang": lang,
         "is_rtl": lang == "ar",
         "t": I18N[lang],
+        "gallery_images": load_gallery_images(lang),
+        "gallery_groups": get_gallery_groups(lang),
+        "gallery_slots": get_gallery_slots(lang),
     }
 
 
@@ -273,3 +573,153 @@ def ueber_uns(request: Request):
 @app.get("/kontakt")
 def kontakt(request: Request):
     return templates.TemplateResponse(request, "kontakt.html", base_context(request))
+
+
+@app.get("/admin/upload-images")
+def admin_upload_page(request: Request, section: str = "reception", user: str = Depends(verify_admin)):
+    return _render_admin_page(request, user=user, selected_section=section)
+
+
+@app.post("/admin/upload-images")
+def admin_upload_images(
+    request: Request,
+    section: str = Form("reception"),
+    images: list[UploadFile] = File(...),
+    title_de: str = Form(""),
+    title_ar: str = Form(""),
+    user: str = Depends(verify_admin),
+):
+    manifest = load_manifest()
+    created = []
+    errors = []
+
+    if section not in SLOT_KEYS:
+        errors.append("Invalid section selected.")
+
+    for image in images:
+        if not image.filename:
+            continue
+        try:
+            item = process_upload_image(image, section=section, title_de=title_de or None, title_ar=title_ar or None)
+            created.append(item)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(str(exc))
+
+    if created:
+        section_data = manifest.get(section, {"main_image_id": None, "images": []})
+        existing_images = section_data.get("images", [])
+        existing_images.extend(created)
+        section_data["images"] = existing_images
+        if not section_data.get("main_image_id"):
+            section_data["main_image_id"] = created[0]["id"]
+        manifest[section] = section_data
+        save_manifest(manifest)
+
+    return _render_admin_page(
+        request,
+        user=user,
+        selected_section=section,
+        upload_success=f"Uploaded and optimized {len(created)} image(s) for section: {section}." if created else None,
+        upload_errors=errors,
+    )
+
+
+@app.post("/admin/upload-images/set-main")
+def admin_set_main_image(
+    request: Request,
+    section: str = Form("reception"),
+    image_id: str = Form(""),
+    user: str = Depends(verify_admin),
+):
+    manifest = load_manifest()
+    section_data = manifest.get(section)
+    if not section_data:
+        return _render_admin_page(request, user=user, selected_section=section, upload_errors=["Section has no uploaded images."])
+
+    images = section_data.get("images", [])
+    if not any(img.get("id") == image_id for img in images):
+        return _render_admin_page(request, user=user, selected_section=section, upload_errors=["Image not found in this section."])
+
+    section_data["main_image_id"] = image_id
+    manifest[section] = section_data
+    save_manifest(manifest)
+
+    return _render_admin_page(request, user=user, selected_section=section, upload_success=f"Main image updated for section: {section}.")
+
+
+@app.post("/admin/upload-images/delete-image")
+def admin_delete_single_image(
+    request: Request,
+    section: str = Form("reception"),
+    image_id: str = Form(""),
+    user: str = Depends(verify_admin),
+):
+    manifest = load_manifest()
+    section_data = manifest.get(section)
+    if not section_data:
+        return _render_admin_page(request, user=user, selected_section=section, upload_errors=["Section has no uploaded images."])
+
+    images = section_data.get("images", [])
+    kept = []
+    deleted_item = None
+    for img in images:
+        if img.get("id") == image_id:
+            deleted_item = img
+        else:
+            kept.append(img)
+
+    if not deleted_item:
+        return _render_admin_page(request, user=user, selected_section=section, upload_errors=["Image not found."])
+
+    _delete_optimized_files(deleted_item)
+
+    if kept:
+        section_data["images"] = kept
+        if section_data.get("main_image_id") == image_id:
+            section_data["main_image_id"] = kept[0].get("id")
+        manifest[section] = section_data
+    else:
+        manifest.pop(section, None)
+
+    save_manifest(manifest)
+    return _render_admin_page(request, user=user, selected_section=section, upload_success=f"Deleted one image from section: {section}.")
+
+
+@app.post("/admin/upload-images/delete-section")
+def admin_delete_section_image(
+    request: Request,
+    section: str = Form("reception"),
+    user: str = Depends(verify_admin),
+):
+    manifest = load_manifest()
+    if section not in SLOT_KEYS:
+        return _render_admin_page(request, user=user, selected_section="reception", upload_errors=["Invalid section selected."])
+
+    section_data = manifest.pop(section, None)
+    if section_data:
+        for img in section_data.get("images", []):
+            _delete_optimized_files(img)
+        save_manifest(manifest)
+        msg = f"Deleted all images for section: {section}."
+    else:
+        msg = f"No uploaded images found for section: {section}."
+
+    return _render_admin_page(request, user=user, selected_section=section, upload_success=msg)
+
+
+@app.post("/admin/upload-images/delete-all")
+def admin_delete_all_images(request: Request, user: str = Depends(verify_admin)):
+    manifest = load_manifest()
+    for section_data in manifest.values():
+        for img in section_data.get("images", []):
+            _delete_optimized_files(img)
+
+    if OPTIMIZED_DIR.exists():
+        for fp in OPTIMIZED_DIR.iterdir():
+            if fp.is_file():
+                fp.unlink()
+
+    if MANIFEST_PATH.exists():
+        MANIFEST_PATH.unlink()
+
+    return _render_admin_page(request, user=user, upload_success="Deleted all uploaded gallery images.")

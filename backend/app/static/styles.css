@@ -241,7 +241,8 @@ a { color: inherit; text-decoration: none; }
 .contact-form { display: grid; gap: 0.8rem; }
 .contact-form label { display: grid; gap: 0.35rem; font-weight: 600; }
 .contact-form input,
-.contact-form textarea {
+.contact-form textarea,
+.contact-form select {
     border: 1px solid var(--line);
     background: #fbfdfc;
     border-radius: 0.7rem;
@@ -249,7 +250,8 @@ a { color: inherit; text-decoration: none; }
     font: inherit;
 }
 .contact-form input:focus,
-.contact-form textarea:focus { outline: 2px solid #8ad7d0; border-color: var(--primary); }
+.contact-form textarea:focus,
+.contact-form select:focus { outline: 2px solid #8ad7d0; border-color: var(--primary); }
 .form-hint { font-size: 0.92rem; color: var(--ink-muted); }
 .form-success {
     border: 1px solid #98e2c8;
@@ -651,4 +653,18 @@ body.rtl .lightbox-close {
     .clinic-gallery {
         grid-template-columns: 1fr;
     }
+}
+
+.lightbox-nav {
+    display: flex;
+    gap: 0.45rem;
+    justify-content: center;
+    margin-top: 0.55rem;
+}
+
+.lightbox-nav .btn-secondary {
+    min-width: 44px;
+    min-height: 40px;
+    padding: 0.35rem 0.7rem;
+    font-size: 1.1rem;
 }
