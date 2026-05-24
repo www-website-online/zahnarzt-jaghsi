@@ -1,52 +1,45 @@
 {% extends "base.html" %}
-{% block title_suffix %} – Über uns{% endblock %}
+{% block title_suffix %}{{ t.about_title_suffix }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
-    <h1>Über unsere Praxis</h1>
-    <p>
-        Bei uns stehen Fachkompetenz, Respekt und verständliche Kommunikation im Mittelpunkt. 
-        Unser Ziel ist eine langfristig gesunde und ästhetische Zahnsituation für Sie.
-    </p>
+    <h1>{{ t.about_h1 }}</h1>
+    <p>{{ t.about_intro }}</p>
 </section>
 
 <section class="two-column">
     <div class="column">
         <article class="info-box">
-            <h3>M.Sc. Abdulaziz Jaghsi</h3>
-            <p>
-                Mit Spezialisierung in Prothetik bietet Herr Jaghsi hochwertige, 
-                wissenschaftlich fundierte Behandlungskonzepte für funktionelle und 
-                ästhetische Ergebnisse.
-            </p>
+            <h3>{{ t.about_doctor_h }}</h3>
+            <p>{{ t.about_doctor_p }}</p>
         </article>
 
         <article class="info-box">
-            <h3>Behandlungsschwerpunkte</h3>
+            <h3>{{ t.about_focus_h }}</h3>
             <ul>
-                <li>Prothetische Versorgungen</li>
-                <li>Implantatgetragener Zahnersatz</li>
-                <li>Ästhetische Rekonstruktionen</li>
+                <li>{{ t.about_focus_l1 }}</li>
+                <li>{{ t.about_focus_l2 }}</li>
+                <li>{{ t.about_focus_l3 }}</li>
             </ul>
         </article>
     </div>
 
     <div class="column">
         <article class="info-box">
-            <h3>Unsere Philosophie</h3>
+            <h3>{{ t.about_philosophy_h }}</h3>
             <ul>
-                <li>Individuelle Konzepte statt Standardlösungen</li>
-                <li>Ausführliche Aufklärung vor jeder Behandlung</li>
-                <li>Einfühlsame Betreuung in ruhiger Atmosphäre</li>
+                <li>{{ t.about_philosophy_l1 }}</li>
+                <li>{{ t.about_philosophy_l2 }}</li>
+                <li>{{ t.about_philosophy_l3 }}</li>
             </ul>
         </article>
 
         <article class="info-box">
-            <h3>Sprachen</h3>
+            <h3>{{ t.about_languages_h }}</h3>
             <ul>
-                <li>Deutsch</li>
-                <li>Arabisch</li>
-                <li>Englisch</li>
+                <li>{{ t.about_languages_l1 }}</li>
+                <li>{{ t.about_languages_l2 }}</li>
+                <li>{{ t.about_languages_l3 }}</li>
             </ul>
         </article>
     </div>

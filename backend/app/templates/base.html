@@ -1,33 +1,40 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ lang }}" dir="{{ 'rtl' if is_rtl else 'ltr' }}">
 <head>
     <meta charset="UTF-8" />
     <title>{{ clinic_name }}{% block title_suffix %}{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/static/styles.css?v=4" />
+    <link rel="stylesheet" href="/static/styles.css?v=6" />
 </head>
-<body>
+<body class="{{ 'rtl' if is_rtl else 'ltr' }}">
 <header class="header">
     <div class="container header-inner">
-        <a class="logo" href="/" aria-label="Startseite">
+        <a class="logo" href="/?lang={{ lang }}" aria-label="Startseite">
             <img src="/static/logo.png" alt="Praxis Logo" class="logo-img">
             <div>
-                <div class="logo-title">Zahnarztpraxis Berlin</div>
+                <div class="logo-title">{{ t.clinic_tag }}</div>
                 <div class="logo-subtitle">M.Sc. Abdulaziz Jaghsi</div>
             </div>
         </a>
 
-        <nav class="nav">
-            <a href="/">Startseite</a>
-            <a href="/leistungen">Leistungen</a>
-            <a href="/ueber-uns">Über uns</a>
-            <a href="/kontakt">Kontakt</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <nav id="site-nav" class="nav" data-open="false">
+            <a href="/?lang={{ lang }}">{{ t.nav_home }}</a>
+            <a href="/leistungen?lang={{ lang }}">{{ t.nav_services }}</a>
+            <a href="/ueber-uns?lang={{ lang }}">{{ t.nav_about }}</a>
+            <a href="/kontakt?lang={{ lang }}">{{ t.nav_contact }}</a>
+            <a class="lang-switch" href="{{ request.url.path }}?lang={{ 'ar' if lang == 'de' else 'de' }}">{{ t.switch_lang }}</a>
         </nav>
 
-        <a class="btn-primary"
+        <a class="btn-primary header-cta"
            href="https://www.doctolib.de/zahnmedizin/berlin/abdulaziz-jaghsi"
            target="_blank" rel="noopener noreferrer">
-            Termin buchen
+            {{ t.book_btn }}
         </a>
     </div>
 </header>
@@ -42,8 +49,31 @@
     <div class="container footer-inner">
         <div><strong>{{ clinic_name }}</strong></div>
         <div>{{ address }}</div>
-        <div>Telefon: {{ phone_landline }} · Mobil: {{ phone_mobile }}</div>
+        <div>{{ t.phone_label }}: {{ phone_landline }} · {{ t.mobile_label }}: {{ phone_mobile }}</div>
     </div>
 </footer>
+
+<script>
+(function () {
+    const toggle = document.querySelector('.nav-toggle');
+    const nav = document.getElementById('site-nav');
+    if (!toggle || !nav) return;
+
+    toggle.addEventListener('click', function () {
+        const open = nav.getAttribute('data-open') === 'true';
+        nav.setAttribute('data-open', String(!open));
+        toggle.setAttribute('aria-expanded', String(!open));
+    });
+
+    nav.querySelectorAll('a').forEach(function (link) {
+        link.addEventListener('click', function () {
+            if (window.matchMedia('(max-width: 980px)').matches) {
+                nav.setAttribute('data-open', 'false');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    });
+})();
+</script>
 </body>
 </html>

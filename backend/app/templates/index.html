@@ -1,64 +1,129 @@
 {% extends "base.html" %}
-{% block title_suffix %} – Ihre Zahnarztpraxis in Neukölln{% endblock %}
+{% block title_suffix %}{{ t.home_title_suffix }}{% endblock %}
 
 {% block content %}
 <section class="hero">
     <article class="hero-panel">
-        <span class="hero-eyebrow">Moderne Zahnmedizin in Berlin-Neukölln</span>
-        <h1>Ihr Lächeln in erfahrenen Händen</h1>
-        <p>
-            Präzise Diagnostik, hochwertige Prothetik und ein einfühlsames Team: 
-            Wir begleiten Sie von der ersten Beratung bis zum langfristigen Behandlungserfolg.
-        </p>
+        <span class="hero-eyebrow">{{ t.home_eyebrow }}</span>
+        <h1>{{ t.home_h1 }}</h1>
+        <p>{{ t.home_intro }}</p>
 
         <div class="hero-actions">
-            <a class="btn-primary" href="tel:+49306851044">Jetzt anrufen</a>
-            <a class="btn-secondary" href="/kontakt">Kontakt aufnehmen</a>
+            <a class="btn-primary" href="tel:+49306851044">{{ t.home_call }}</a>
+            <a class="btn-secondary" href="/kontakt?lang={{ lang }}">{{ t.home_contact }}</a>
         </div>
 
         <div class="hero-bullets">
-            <span>Schwerpunkt: Prothetik & Implantatprothetik</span>
-            <span>Termine schnell online über Doctolib</span>
-            <span>Deutsch, Arabisch und Englisch</span>
+            <span>{{ t.home_b1 }}</span>
+            <span>{{ t.home_b2 }}</span>
+            <span>{{ t.home_b3 }}</span>
         </div>
 
         <div class="kpi-grid">
-            <div class="kpi"><strong>3+</strong><span>Behandlungssprachen</span></div>
-            <div class="kpi"><strong>100%</strong><span>Individuelle Beratung</span></div>
-            <div class="kpi"><strong>Top</strong><span>Lage in Neukölln</span></div>
+            <div class="kpi"><strong>3+</strong><span>{{ t.home_kpi1 }}</span></div>
+            <div class="kpi"><strong>100%</strong><span>{{ t.home_kpi2 }}</span></div>
+            <div class="kpi"><strong>Top</strong><span>{{ t.home_kpi3 }}</span></div>
         </div>
     </article>
 
     <aside class="hero-card">
-        <h3>Praxis auf einen Blick</h3>
-        <p><strong>Adresse:</strong><br>Karl-Marx-Straße 214<br>12055 Berlin</p>
-        <p><strong>Sprechzeiten:</strong><br>Mo, Di, Do: 09:00 – 18:00<br>Mi, Fr: 09:00 – 15:00</p>
-        <p><strong>Telefon:</strong> {{ phone_landline }}<br><strong>Mobil:</strong> {{ phone_mobile }}</p>
+        <h3>{{ t.home_glance }}</h3>
+        <p><strong>{{ t.address_label }}:</strong><br>Karl-Marx-Straße 214<br>12055 Berlin</p>
+        <p><strong>{{ t.hours_label }}:</strong><br>Mo, Di, Do: 09:00 – 18:00<br>Mi, Fr: 09:00 – 15:00</p>
+        <p><strong>{{ t.phone_label }}:</strong> {{ phone_landline }}<br><strong>{{ t.mobile_label }}:</strong> {{ phone_mobile }}</p>
         <a class="link"
            href="https://www.google.com/maps/place/%D8%AF%D9%83%D8%AA%D9%88%D8%B1+%D8%A7%D9%84%D8%A3%D8%B3%D9%86%D8%A7%D9%86+%D8%B9%D8%A8%D8%AF+%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2+%D8%AC%D8%BA%D8%B5%D9%8A%E2%80%AD/@52.4707366,13.4411629,17z/data=!3m1!4b1!4m6!3m5!1s0x47a84ff2c86a0db9:0x65a0a118fc7cc1a5!8m2!3d52.4707366!4d13.4411629!16s%2Fg%2F11ln_590cn?entry=ttu"
            target="_blank" rel="noopener noreferrer">
-            Route in Google Maps öffnen
+            {{ t.route_btn }}
         </a>
     </aside>
 </section>
 
 <section class="page-header" style="margin-top:1.4rem;">
-    <h1>Warum Patientinnen und Patienten uns vertrauen</h1>
-    <p>Wir kombinieren wissenschaftlich fundierte Zahnmedizin mit klarer Kommunikation und einem ruhigen Behandlungserlebnis.</p>
+    <h1>{{ t.home_why_h }}</h1>
+    <p>{{ t.home_why_p }}</p>
 </section>
 
 <section class="highlight-grid">
     <article>
-        <h3>Individuelle Therapiepläne</h3>
-        <p>Jeder Befund ist einzigartig. Deshalb planen wir strukturiert, transparent und passend zu Ihrem Alltag.</p>
+        <h3>{{ t.home_c1_h }}</h3>
+        <p>{{ t.home_c1_p }}</p>
     </article>
     <article>
-        <h3>Funktion trifft Ästhetik</h3>
-        <p>Von Kronen bis Implantatprothetik achten wir auf langfristige Stabilität und ein natürliches Erscheinungsbild.</p>
+        <h3>{{ t.home_c2_h }}</h3>
+        <p>{{ t.home_c2_p }}</p>
     </article>
     <article>
-        <h3>Kurze Wege, klare Abläufe</h3>
-        <p>Direkte Terminbuchung, gute Erreichbarkeit und verständliche Aufklärung sorgen für einen entspannten Praxisbesuch.</p>
+        <h3>{{ t.home_c3_h }}</h3>
+        <p>{{ t.home_c3_p }}</p>
     </article>
 </section>
+
+<section class="page-header" style="margin-top:1.6rem;">
+    <h1>{{ t.gallery_h }}</h1>
+    <p>{{ t.gallery_p }}</p>
+</section>
+
+<section class="clinic-gallery" aria-label="Clinic gallery">
+    <button class="gallery-item" type="button" data-full="/static/gallery/praxis-empfang.svg" data-alt="{{ t.gallery_i1 }}">
+        <img src="/static/gallery/praxis-empfang.svg" alt="{{ t.gallery_i1 }}" loading="lazy" width="1600" height="1000">
+        <span>{{ t.gallery_i1 }}</span>
+    </button>
+    <button class="gallery-item" type="button" data-full="/static/gallery/behandlung-raum.svg" data-alt="{{ t.gallery_i2 }}">
+        <img src="/static/gallery/behandlung-raum.svg" alt="{{ t.gallery_i2 }}" loading="lazy" width="1600" height="1000">
+        <span>{{ t.gallery_i2 }}</span>
+    </button>
+    <button class="gallery-item" type="button" data-full="/static/gallery/team-beratung.svg" data-alt="{{ t.gallery_i3 }}">
+        <img src="/static/gallery/team-beratung.svg" alt="{{ t.gallery_i3 }}" loading="lazy" width="1600" height="1000">
+        <span>{{ t.gallery_i3 }}</span>
+    </button>
+    <button class="gallery-item" type="button" data-full="/static/gallery/technik-digital.svg" data-alt="{{ t.gallery_i4 }}">
+        <img src="/static/gallery/technik-digital.svg" alt="{{ t.gallery_i4 }}" loading="lazy" width="1600" height="1000">
+        <span>{{ t.gallery_i4 }}</span>
+    </button>
+    <button class="gallery-item" type="button" data-full="/static/gallery/prophylaxe.svg" data-alt="{{ t.gallery_i5 }}">
+        <img src="/static/gallery/prophylaxe.svg" alt="{{ t.gallery_i5 }}" loading="lazy" width="1600" height="1000">
+        <span>{{ t.gallery_i5 }}</span>
+    </button>
+    <button class="gallery-item" type="button" data-full="/static/gallery/wartebereich.svg" data-alt="{{ t.gallery_i6 }}">
+        <img src="/static/gallery/wartebereich.svg" alt="{{ t.gallery_i6 }}" loading="lazy" width="1600" height="1000">
+        <span>{{ t.gallery_i6 }}</span>
+    </button>
+</section>
+
+<dialog class="lightbox" id="gallery-lightbox">
+    <button type="button" class="lightbox-close" aria-label="Close">×</button>
+    <img src="" alt="" class="lightbox-image">
+    <p class="lightbox-caption"></p>
+</dialog>
+
+<script>
+(function () {
+    const items = document.querySelectorAll('.gallery-item');
+    const lightbox = document.getElementById('gallery-lightbox');
+    if (!items.length || !lightbox) return;
+
+    const image = lightbox.querySelector('.lightbox-image');
+    const caption = lightbox.querySelector('.lightbox-caption');
+    const closeBtn = lightbox.querySelector('.lightbox-close');
+
+    items.forEach((item) => {
+        item.addEventListener('click', () => {
+            const full = item.getAttribute('data-full');
+            const alt = item.getAttribute('data-alt') || '';
+            image.src = full;
+            image.alt = alt;
+            caption.textContent = alt;
+            lightbox.showModal();
+        });
+    });
+
+    closeBtn.addEventListener('click', () => lightbox.close());
+    lightbox.addEventListener('click', (e) => {
+        const bounds = lightbox.getBoundingClientRect();
+        const inside = e.clientX >= bounds.left && e.clientX <= bounds.right && e.clientY >= bounds.top && e.clientY <= bounds.bottom;
+        if (!inside) lightbox.close();
+    });
+})();
+</script>
 {% endblock %}

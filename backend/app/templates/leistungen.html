@@ -1,73 +1,65 @@
 {% extends "base.html" %}
-{% block title_suffix %} – Leistungen{% endblock %}
+{% block title_suffix %}{{ t.services_title_suffix }}{% endblock %}
 
 {% block content %}
 <section class="page-header">
-    <h1>Unsere Leistungen</h1>
-    <p>
-        Moderne Zahnmedizin mit Schwerpunkt Prothetik: Wir entwickeln für Sie präzise, 
-        nachhaltige und ästhetisch überzeugende Lösungen.
-    </p>
+    <h1>{{ t.services_h1 }}</h1>
+    <p>{{ t.services_intro }}</p>
 </section>
 
 <section class="cards-grid">
     <article class="card">
-        <h2>Prothetik (Schwerpunkt)</h2>
-        <p>Individuelle Konzepte für festen und herausnehmbaren Zahnersatz.</p>
+        <h2>{{ t.service_1_h }}</h2>
+        <p>{{ t.service_1_p }}</p>
         <ul>
-            <li>Kronen und Brücken</li>
-            <li>Teil- und Vollprothesen</li>
-            <li>Kombinationsversorgungen</li>
+            <li>{{ t.service_1_l1 }}</li>
+            <li>{{ t.service_1_l2 }}</li>
+            <li>{{ t.service_1_l3 }}</li>
         </ul>
     </article>
-
     <article class="card">
-        <h2>Implantatprothetik</h2>
-        <p>Stabiler Zahnersatz auf Implantaten mit natürlicher Funktion.</p>
+        <h2>{{ t.service_2_h }}</h2>
+        <p>{{ t.service_2_p }}</p>
         <ul>
-            <li>Einzelzahnersatz</li>
-            <li>Implantatgetragene Brücken</li>
-            <li>Festsitzende und herausnehmbare Lösungen</li>
+            <li>{{ t.service_2_l1 }}</li>
+            <li>{{ t.service_2_l2 }}</li>
+            <li>{{ t.service_2_l3 }}</li>
         </ul>
     </article>
-
     <article class="card">
-        <h2>Ästhetische Zahnheilkunde</h2>
-        <p>Harmonische Ergebnisse für ein gesundes und selbstbewusstes Lächeln.</p>
+        <h2>{{ t.service_3_h }}</h2>
+        <p>{{ t.service_3_p }}</p>
         <ul>
-            <li>Zahnfarbene Füllungen</li>
-            <li>Veneers</li>
-            <li>Rekonstruktionen im Frontzahnbereich</li>
+            <li>{{ t.service_3_l1 }}</li>
+            <li>{{ t.service_3_l2 }}</li>
+            <li>{{ t.service_3_l3 }}</li>
         </ul>
     </article>
-
     <article class="card">
-        <h2>Prophylaxe & Zahnreinigung</h2>
-        <p>Professionelle Vorsorge zum Schutz von Zähnen und Zahnfleisch.</p>
+        <h2>{{ t.service_4_h }}</h2>
+        <p>{{ t.service_4_p }}</p>
         <ul>
-            <li>Professionelle Zahnreinigung</li>
-            <li>Mundhygiene-Beratung</li>
-            <li>Regelmäßige Kontrollen</li>
+            <li>{{ t.service_4_l1 }}</li>
+            <li>{{ t.service_4_l2 }}</li>
+            <li>{{ t.service_4_l3 }}</li>
         </ul>
     </article>
-
     <article class="card">
-        <h2>Schmerzbehandlung</h2>
-        <p>Schnelle und strukturierte Hilfe bei akuten Beschwerden.</p>
+        <h2>{{ t.service_5_h }}</h2>
+        <p>{{ t.service_5_p }}</p>
         <ul>
-            <li>Akutdiagnostik</li>
-            <li>Entzündungs- und Schmerztherapie</li>
-            <li>Planung der Folgetherapie</li>
+            <li>{{ t.service_5_l1 }}</li>
+            <li>{{ t.service_5_l2 }}</li>
+            <li>{{ t.service_5_l3 }}</li>
         </ul>
     </article>
-
     <article class="card">
-        <h2>Beratung & Zweitmeinung</h2>
-        <p>Klare Einschätzung Ihrer Situation mit transparenten Optionen.</p>
+        <h2>{{ t.service_6_h }}</h2>
+        <p>{{ t.service_6_p }}</p>
         <ul>
-            <li>Ausführliche Befundbesprechung</li>
-            <li>Therapiealternativen im Überblick</li>
-            <li>Verständliche Kostenaufklärung</li>
+            <li>{{ t.service_6_l1 }}</li>
+            <li>{{ t.service_6_l2 }}</li>
+            <li>{{ t.service_6_l3 }}</li>
         </ul>
     </article>
 </section>
