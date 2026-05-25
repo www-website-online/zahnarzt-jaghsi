@@ -67,7 +67,7 @@
 <section class="clinic-gallery" aria-label="Clinic gallery">
     {% for image in gallery_images %}
     <button class="gallery-item" type="button" data-slot="{{ image.slot }}" data-full="{{ image.full }}" data-alt="{{ image.alt }}">
-        <img src="{{ image.src }}" {% if image.srcset %}srcset="{{ image.srcset }}" sizes="(max-width: 640px) 100vw, (max-width: 980px) 50vw, 33vw"{% endif %} alt="{{ image.alt }}" loading="lazy" width="1600" height="1000">
+        <img src="{{ image.src }}" {% if image.srcset %}srcset="{{ image.srcset }}" sizes="(max-width: 640px) 100vw, (max-width: 980px) 50vw, 33vw"{% endif %} alt="{{ image.alt }}" loading="{% if loop.first %}eager{% else %}lazy{% endif %}" fetchpriority="{% if loop.first %}high{% else %}auto{% endif %}" width="1600" height="1000">
         <span>{{ image.alt }}</span>
     </button>
     {% endfor %}

@@ -273,7 +273,7 @@ SLOT_KEYS = {slot["key"] for slot in GALLERY_SLOTS}
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
-TARGET_SIZES = [480, 800, 1200, 1600]
+TARGET_SIZES = [320, 480, 800, 1200, 1600]
 
 
 def get_lang(request: Request) -> str:
@@ -348,6 +348,34 @@ def get_gallery_slots(lang: str) -> list[dict]:
     return [{"key": slot["key"], "label": I18N[lang][slot["label_key"]]} for slot in GALLERY_SLOTS]
 
 
+def _versioned_url(url: str, version: int | None = None) -> str:
+    if not url:
+        return url
+    if version is None:
+        version = int(time.time())
+    sep = '&' if '?' in url else '?'
+    return f"{url}{sep}v={version}"
+
+
+def _versioned_srcset(srcset: str, version: int | None = None) -> str:
+    if not srcset:
+        return srcset
+    parts = []
+    for raw in srcset.split(','):
+        item = raw.strip()
+        if not item:
+            continue
+        segs = item.split()
+        if not segs:
+            continue
+        url = _versioned_url(segs[0], version)
+        if len(segs) > 1:
+            parts.append(f"{url} {segs[1]}")
+        else:
+            parts.append(url)
+    return ', '.join(parts)
+
+
 def _get_main_image(section_data: dict | None) -> dict | None:
     if not section_data:
         return None
@@ -372,9 +400,9 @@ def load_gallery_images(lang: str) -> list[dict]:
             result.append(
                 {
                     "slot": key,
-                    "src": main_image.get("thumb_url", main_image.get("full_url", slot["src"])),
-                    "full": main_image.get("full_url", slot["src"]),
-                    "srcset": main_image.get("srcset", ""),
+                    "src": _versioned_url(main_image.get("thumb_url", main_image.get("full_url", slot["src"])), main_image.get("created_at")),
+                    "full": _versioned_url(main_image.get("full_url", slot["src"]), main_image.get("created_at")),
+                    "srcset": _versioned_srcset(main_image.get("srcset", ""), main_image.get("created_at")),
                     "alt": main_image.get("title_ar") if lang == "ar" else main_image.get("title_de"),
                 }
             )
@@ -401,7 +429,7 @@ def get_gallery_groups(lang: str) -> dict[str, list[dict]]:
         if images:
             groups[key] = [
                 {
-                    "full": img.get("full_url", slot["src"]),
+                    "full": _versioned_url(img.get("full_url", slot["src"]), img.get("created_at")),
                     "alt": img.get("title_ar") if lang == "ar" else img.get("title_de") or I18N[lang][slot["label_key"]],
                 }
                 for img in images
@@ -421,8 +449,8 @@ def get_section_gallery(lang: str, section: str) -> list[dict]:
         rows.append(
             {
                 "id": img.get("id"),
-                "thumb": img.get("thumb_url", img.get("full_url", "")),
-                "full": img.get("full_url", ""),
+                "thumb": _versioned_url(img.get("thumb_url", img.get("full_url", "")), img.get("created_at")),
+                "full": _versioned_url(img.get("full_url", ""), img.get("created_at")),
                 "alt": img.get("title_ar") if lang == "ar" else img.get("title_de"),
                 "is_main": img.get("id") == main_id,
             }
