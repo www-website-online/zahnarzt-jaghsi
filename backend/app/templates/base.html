@@ -3,8 +3,25 @@
 <head>
     <meta charset="UTF-8" />
     <title>{{ clinic_name }}{% block title_suffix %}{% endblock %}</title>
+    <meta name="description" content="{{ meta_description }}" />
+    <meta name="robots" content="{{ meta_robots }}" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href="{{ canonical_url }}" />
+    <link rel="alternate" hreflang="de" href="{{ alt_de }}" />
+    <link rel="alternate" hreflang="ar" href="{{ alt_ar }}" />
+    <link rel="alternate" hreflang="x-default" href="{{ alt_de }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{ clinic_name }}{% block og_title_suffix %}{% endblock %}" />
+    <meta property="og:description" content="{{ meta_description }}" />
+    <meta property="og:url" content="{{ canonical_url }}" />
+    <meta property="og:site_name" content="{{ clinic_name }}" />
+    <meta property="og:image" content="{{ site_url }}/static/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{ clinic_name }}{% block tw_title_suffix %}{% endblock %}" />
+    <meta name="twitter:description" content="{{ meta_description }}" />
+    <meta name="twitter:image" content="{{ site_url }}/static/logo.png" />
     <link rel="stylesheet" href="/static/styles.css?v=6" />
+    <script type="application/ld+json">{{ schema_json|tojson }}</script>
 </head>
 <body class="{{ 'rtl' if is_rtl else 'ltr' }}">
 <header class="header">

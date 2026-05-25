@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import PlainTextResponse, Response
 
 app = FastAPI()
 
@@ -39,6 +40,22 @@ MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 SUPPORTED_LANGS = {"de", "ar"}
 DEFAULT_LANG = "de"
+SITE_URL = (os.getenv("SITE_URL") or "https://zahnarzt-jaghsi.de").rstrip("/")
+
+SEO_META = {
+    "de": {
+        "home": "Moderne Zahnarztpraxis in Berlin-Neukoelln mit Schwerpunkt Prothetik und Implantatprothetik. Termin online oder telefonisch buchen.",
+        "services": "Leistungen der Zahnarztpraxis: Prothetik, Implantatprothetik, Prophylaxe, aesthetische Zahnheilkunde und konservierende Behandlungen.",
+        "about": "Lernen Sie M.Sc. Abdulaziz Jaghsi und die Zahnarztpraxis in Berlin-Neukoelln kennen: moderne Behandlung, klare Beratung und mehrsprachige Betreuung.",
+        "contact": "Kontakt zur Zahnarztpraxis in Berlin-Neukoelln. Adresse, Telefon, Online-Termin und Anfahrt auf einen Blick.",
+    },
+    "ar": {
+        "home": "عيادة اسنان حديثة في برلين نيوكولن متخصصة في التركيبات وتعويضات الزرعات مع حجز موعد سريع اونلاين او هاتفيا.",
+        "services": "خدمات العيادة تشمل التركيبات السنية وتعويضات الزرعات والوقاية والعلاج التجميلي وعلاجات الاسنان المحافظة.",
+        "about": "تعرف على عيادة الدكتور عبد العزيز جغصي في برلين نيوكولن ونهجنا العلاجي الحديث والاستشارة الواضحة بلغات متعددة.",
+        "contact": "تواصل مع عيادة الاسنان في برلين نيوكولن: العنوان ووسائل الاتصال وحجز المواعيد وخريطة الوصول.",
+    },
+}
 
 security = HTTPBasic()
 
@@ -489,7 +506,7 @@ def _render_admin_page(request: Request, user: str, selected_section: str = "rec
     if selected_section not in SLOT_KEYS:
         selected_section = "reception"
 
-    ctx = base_context(request)
+    ctx = base_context(request, noindex=True)
     ctx.update(
         {
             "admin_user": user,
@@ -566,9 +583,50 @@ def process_upload_image(file: UploadFile, section: str, title_de: str | None = 
     }
 
 
-def base_context(request: Request) -> dict:
-    lang = get_lang(request)
+
+def _page_key_from_path(path: str) -> str:
+    if path == "/leistungen":
+        return "services"
+    if path == "/ueber-uns":
+        return "about"
+    if path == "/kontakt":
+        return "contact"
+    return "home"
+
+
+def _seo_context(request: Request, lang: str, noindex: bool = False) -> dict:
+    path = request.url.path
+    page_key = _page_key_from_path(path)
+    canonical = f"{SITE_URL}{path}"
     return {
+        "meta_description": SEO_META[lang][page_key],
+        "canonical_url": canonical,
+        "alt_de": f"{canonical}?lang=de",
+        "alt_ar": f"{canonical}?lang=ar",
+        "meta_robots": "noindex, nofollow" if noindex else "index, follow",
+        "schema_json": {
+            "@context": "https://schema.org",
+            "@type": "Dentist",
+            "name": CLINIC_NAME,
+            "url": SITE_URL,
+            "telephone": PHONE_LANDLINE,
+            "address": {
+                "@type": "PostalAddress",
+                "streetAddress": ADDRESS.split(',')[0].strip(),
+                "postalCode": "12055",
+                "addressLocality": "Berlin",
+                "addressCountry": "DE"
+            },
+            "areaServed": "Berlin",
+            "sameAs": [
+                "https://www.doctolib.de/zahnmedizin/berlin/abdulaziz-jaghsi"
+            ]
+        }
+    }
+
+def base_context(request: Request, noindex: bool = False) -> dict:
+    lang = get_lang(request)
+    ctx = {
         "request": request,
         "clinic_name": CLINIC_NAME,
         "address": ADDRESS,
@@ -580,8 +638,29 @@ def base_context(request: Request) -> dict:
         "gallery_images": load_gallery_images(lang),
         "gallery_groups": get_gallery_groups(lang),
         "gallery_slots": get_gallery_slots(lang),
+        "site_url": SITE_URL,
     }
+    ctx.update(_seo_context(request, lang, noindex=noindex))
+    return ctx
 
+
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt() -> str:
+    return f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}/sitemap.xml\n"
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml() -> Response:
+    pages = ["/", "/leistungen", "/ueber-uns", "/kontakt"]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for page in pages:
+        for lang in ("de", "ar"):
+            loc = f"{SITE_URL}{page}?lang={lang}"
+            lines.extend(["  <url>", f"    <loc>{loc}</loc>", "    <changefreq>weekly</changefreq>", "    <priority>0.8</priority>", "  </url>"])
+    lines.append('</urlset>')
+    return Response(content="\n".join(lines), media_type="application/xml")
 
 @app.get("/")
 def startseite(request: Request):
