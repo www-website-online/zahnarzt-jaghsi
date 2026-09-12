@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title_suffix %} – {{ "Artikel" if lang == "de" else "المقالات" }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <h1>{{ articles_title }}</h1>
+  <p>{{ articles_intro }}</p>
+</section>
+
+<section class="articles-grid">
+  {% for article in articles %}
+  <article class="article-card">
+    <div class="article-meta">{{ article.category }} · {{ article.reading_minutes }} min</div>
+    <h2><a href="/articles/{{ article.slug }}?lang={{ lang }}">{{ article.title }}</a></h2>
+    <p>{{ article.excerpt }}</p>
+    <a class="link" href="/articles/{{ article.slug }}?lang={{ lang }}">{{ "Mehr lesen" if lang == "de" else "قراءة المزيد" }}</a>
+  </article>
+  {% else %}
+  <article class="info-box">
+    <p>{{ "Noch keine Artikel veroeffentlicht." if lang == "de" else "لا توجد مقالات منشورة حاليا." }}</p>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

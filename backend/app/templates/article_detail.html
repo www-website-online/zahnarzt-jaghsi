@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title_suffix %} – {{ article.title }}{% endblock %}
+
+{% block content %}
+<script type="application/ld+json">{{ article_schema|tojson }}</script>
+
+<article class="article-detail">
+  <div class="article-meta">{{ article.category }} · {{ article.reading_minutes }} min</div>
+  <h1>{{ article.title }}</h1>
+  <p class="article-excerpt">{{ article.excerpt }}</p>
+  <div class="article-body">{{ article.content|replace('\n', '<br>')|safe }}</div>
+
+  <div class="article-cta">
+    <a class="btn-primary" href="https://www.doctolib.de/zahnmedizin/berlin/abdulaziz-jaghsi" target="_blank" rel="noopener noreferrer">{{ t.book_btn }}</a>
+    <a class="btn-secondary" href="/kontakt?lang={{ lang }}">{{ t.nav_contact }}</a>
+  </div>
+</article>
+
+<section class="page-header" style="margin-top:1.2rem;">
+  <h2>{{ "Weitere Artikel" if lang == "de" else "مقالات ذات صلة" }}</h2>
+</section>
+<section class="articles-grid">
+  {% for item in related_articles %}
+  <article class="article-card">
+    <h3><a href="/articles/{{ item.slug }}?lang={{ lang }}">{{ item.title }}</a></h3>
+    <p>{{ item.excerpt }}</p>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

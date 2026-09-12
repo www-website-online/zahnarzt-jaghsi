@@ -45,6 +45,7 @@
             <a href="/leistungen?lang={{ lang }}">{{ t.nav_services }}</a>
             <a href="/ueber-uns?lang={{ lang }}">{{ t.nav_about }}</a>
             <a href="/kontakt?lang={{ lang }}">{{ t.nav_contact }}</a>
+            <a href="/articles?lang={{ lang }}">{{ "Artikel" if lang == "de" else "المقالات" }}</a>
             <a class="lang-switch" href="{{ request.url.path }}?lang={{ 'ar' if lang == 'de' else 'de' }}">{{ t.switch_lang }}</a>
         </nav>
 

@@ -4,6 +4,7 @@ import re
 import secrets
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
@@ -20,6 +21,7 @@ GALLERY_DIR = STATIC_DIR / "gallery"
 RUNTIME_UPLOAD_ROOT = Path("/tmp/zahnarzt-gallery")
 OPTIMIZED_DIR = RUNTIME_UPLOAD_ROOT / "optimized"
 MANIFEST_PATH = RUNTIME_UPLOAD_ROOT / "manifest.json"
+ARTICLES_PATH = RUNTIME_UPLOAD_ROOT / "articles.json"
 
 RUNTIME_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 OPTIMIZED_DIR.mkdir(parents=True, exist_ok=True)
@@ -48,12 +50,14 @@ SEO_META = {
         "services": "Leistungen der Zahnarztpraxis: Prothetik, Implantatprothetik, Prophylaxe, aesthetische Zahnheilkunde und konservierende Behandlungen.",
         "about": "Lernen Sie M.Sc. Abdulaziz Jaghsi und die Zahnarztpraxis in Berlin-Neukoelln kennen: moderne Behandlung, klare Beratung und mehrsprachige Betreuung.",
         "contact": "Kontakt zur Zahnarztpraxis in Berlin-Neukoelln. Adresse, Telefon, Online-Termin und Anfahrt auf einen Blick.",
+        "articles": "Ratgeber und Fachartikel der Zahnarztpraxis zu Implantaten, Prothetik, Prophylaxe und moderner Zahnmedizin in Berlin-Neukoelln.",
     },
     "ar": {
         "home": "عيادة اسنان حديثة في برلين نيوكولن متخصصة في التركيبات وتعويضات الزرعات مع حجز موعد سريع اونلاين او هاتفيا.",
         "services": "خدمات العيادة تشمل التركيبات السنية وتعويضات الزرعات والوقاية والعلاج التجميلي وعلاجات الاسنان المحافظة.",
         "about": "تعرف على عيادة الدكتور عبد العزيز جغصي في برلين نيوكولن ونهجنا العلاجي الحديث والاستشارة الواضحة بلغات متعددة.",
         "contact": "تواصل مع عيادة الاسنان في برلين نيوكولن: العنوان ووسائل الاتصال وحجز المواعيد وخريطة الوصول.",
+        "articles": "مقالات ونصائح عيادة الاسنان حول الزرعات والتركيبات والوقاية والعناية اليومية بالاسنان.",
     },
 }
 
@@ -591,6 +595,8 @@ def _page_key_from_path(path: str) -> str:
         return "about"
     if path == "/kontakt":
         return "contact"
+    if path == "/articles" or path.startswith("/articles/"):
+        return "articles"
     return "home"
 
 
@@ -624,6 +630,69 @@ def _seo_context(request: Request, lang: str, noindex: bool = False) -> dict:
         }
     }
 
+def _slugify(value: str) -> str:
+    value = re.sub(r"[^a-zA-Z0-9\s-]", "", value).strip().lower()
+    value = re.sub(r"[\s_-]+", "-", value)
+    return value or f"article-{int(time.time())}"
+
+
+def load_articles() -> list[dict]:
+    if not ARTICLES_PATH.exists():
+        return []
+    try:
+        raw = json.loads(ARTICLES_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(raw, list):
+        return []
+    items = [x for x in raw if isinstance(x, dict)]
+    items.sort(key=lambda x: x.get("updated_at", x.get("created_at", 0)), reverse=True)
+    return items
+
+
+def save_articles(items: list[dict]) -> None:
+    ARTICLES_PATH.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def get_article(slug: str) -> dict | None:
+    for item in load_articles():
+        if item.get("slug") == slug:
+            return item
+    return None
+
+
+def _article_public(item: dict, lang: str) -> dict:
+    title = item.get("title_ar") if lang == "ar" else item.get("title_de")
+    excerpt = item.get("excerpt_ar") if lang == "ar" else item.get("excerpt_de")
+    content = item.get("content_ar") if lang == "ar" else item.get("content_de")
+    return {
+        "slug": item.get("slug", ""),
+        "title": title or item.get("title_de", ""),
+        "excerpt": excerpt or "",
+        "content": content or "",
+        "cover_url": item.get("cover_url", ""),
+        "category": item.get("category", "General"),
+        "updated_at": item.get("updated_at", item.get("created_at", 0)),
+        "reading_minutes": max(1, int((len((content or "").split())) / 180)),
+    }
+
+
+def list_published_articles(lang: str) -> list[dict]:
+    return [_article_public(a, lang) for a in load_articles() if a.get("status") == "published"]
+
+
+def article_admin_ctx(request: Request, user: str, message: str | None = None, error: str | None = None, edit_article: dict | None = None) -> dict:
+    ctx = base_context(request, noindex=True)
+    ctx.update({
+        "admin_user": user,
+        "admin_message": message,
+        "admin_error": error,
+        "articles_admin": load_articles(),
+        "edit_article": edit_article,
+    })
+    return ctx
+
+
 def base_context(request: Request, noindex: bool = False) -> dict:
     lang = get_lang(request)
     ctx = {
@@ -653,12 +722,21 @@ def robots_txt() -> str:
 
 @app.get("/sitemap.xml")
 def sitemap_xml() -> Response:
-    pages = ["/", "/leistungen", "/ueber-uns", "/kontakt"]
+    pages = ["/", "/leistungen", "/ueber-uns", "/kontakt", "/articles"]
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for page in pages:
         for lang in ("de", "ar"):
             loc = f"{SITE_URL}{page}?lang={lang}"
             lines.extend(["  <url>", f"    <loc>{loc}</loc>", "    <changefreq>weekly</changefreq>", "    <priority>0.8</priority>", "  </url>"])
+    for article in load_articles():
+        if article.get("status") != "published":
+            continue
+        slug = article.get("slug", "")
+        if not slug:
+            continue
+        for lang in ("de", "ar"):
+            loc = f"{SITE_URL}/articles/{slug}?lang={lang}"
+            lines.extend(["  <url>", f"    <loc>{loc}</loc>", "    <changefreq>monthly</changefreq>", "    <priority>0.7</priority>", "  </url>"])
     lines.append('</urlset>')
     return Response(content="\n".join(lines), media_type="application/xml")
 
@@ -681,6 +759,138 @@ def ueber_uns(request: Request):
 def kontakt(request: Request):
     return templates.TemplateResponse(request, "kontakt.html", base_context(request))
 
+
+
+
+@app.get("/articles")
+def articles_list(request: Request):
+    ctx = base_context(request)
+    lang = ctx["lang"]
+    ctx.update({
+        "articles": list_published_articles(lang),
+        "articles_title": "Artikel & Ratgeber" if lang == "de" else "مقالات ونصائح",
+        "articles_intro": "Praxiswissen zu Zahnmedizin, Prothetik und Vorsorge." if lang == "de" else "محتوى طبي مبسط حول علاجات الأسنان والوقاية.",
+    })
+    return templates.TemplateResponse(request, "articles.html", ctx)
+
+
+@app.get("/articles/{slug}")
+def article_detail(request: Request, slug: str):
+    raw = get_article(slug)
+    if not raw or raw.get("status") != "published":
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    ctx = base_context(request)
+    lang = ctx["lang"]
+    article = _article_public(raw, lang)
+    article_path = f"/articles/{slug}"
+    canonical = f"{SITE_URL}{article_path}"
+    article_schema = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": article["title"],
+        "description": article["excerpt"],
+        "datePublished": datetime.utcfromtimestamp(raw.get("created_at", int(time.time()))).isoformat() + "Z",
+        "dateModified": datetime.utcfromtimestamp(raw.get("updated_at", raw.get("created_at", int(time.time())))).isoformat() + "Z",
+        "author": {"@type": "Person", "name": "M.Sc. Abdulaziz Jaghsi"},
+        "publisher": {"@type": "Dentist", "name": CLINIC_NAME, "url": SITE_URL},
+        "mainEntityOfPage": canonical,
+    }
+    if article.get("cover_url"):
+        article_schema["image"] = f"{SITE_URL}{article['cover_url']}"
+
+    ctx.update({
+        "article": article,
+        "related_articles": [a for a in list_published_articles(lang) if a["slug"] != slug][:3],
+        "meta_description": article["excerpt"] or ctx.get("meta_description"),
+        "canonical_url": canonical,
+        "alt_de": f"{canonical}?lang=de",
+        "alt_ar": f"{canonical}?lang=ar",
+        "article_schema": article_schema,
+    })
+    return templates.TemplateResponse(request, "article_detail.html", ctx)
+
+
+@app.get("/admin/articles")
+def admin_articles_page(request: Request, user: str = Depends(verify_admin)):
+    return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user))
+
+
+@app.post("/admin/articles")
+def admin_articles_save(
+    request: Request,
+    slug: str = Form(""),
+    title_de: str = Form(""),
+    title_ar: str = Form(""),
+    excerpt_de: str = Form(""),
+    excerpt_ar: str = Form(""),
+    content_de: str = Form(""),
+    content_ar: str = Form(""),
+    category: str = Form("General"),
+    status: str = Form("draft"),
+    user: str = Depends(verify_admin),
+):
+    title_de = title_de.strip()
+    if not title_de:
+        return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, error="German title is required."))
+
+    items = load_articles()
+    clean_slug = _slugify(slug or title_de)
+    now = int(time.time())
+
+    existing = None
+    for it in items:
+        if it.get("slug") == clean_slug:
+            existing = it
+            break
+
+    if existing:
+        existing.update({
+            "title_de": title_de, "title_ar": title_ar.strip(),
+            "excerpt_de": excerpt_de.strip(), "excerpt_ar": excerpt_ar.strip(),
+            "content_de": content_de.strip(), "content_ar": content_ar.strip(),
+            "category": category.strip() or "General",
+            "status": "published" if status == "published" else "draft",
+            "updated_at": now,
+        })
+        msg = "Article updated."
+    else:
+        items.append({
+            "slug": clean_slug,
+            "title_de": title_de,
+            "title_ar": title_ar.strip(),
+            "excerpt_de": excerpt_de.strip(),
+            "excerpt_ar": excerpt_ar.strip(),
+            "content_de": content_de.strip(),
+            "content_ar": content_ar.strip(),
+            "category": category.strip() or "General",
+            "status": "published" if status == "published" else "draft",
+            "cover_url": "",
+            "created_at": now,
+            "updated_at": now,
+        })
+        msg = "Article created."
+
+    save_articles(items)
+    return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, message=msg))
+
+
+@app.post("/admin/articles/edit")
+def admin_articles_edit(request: Request, slug: str = Form(""), user: str = Depends(verify_admin)):
+    art = get_article(slug)
+    if not art:
+        return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, error="Article not found."))
+    return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, edit_article=art))
+
+
+@app.post("/admin/articles/delete")
+def admin_articles_delete(request: Request, slug: str = Form(""), user: str = Depends(verify_admin)):
+    items = load_articles()
+    new_items = [a for a in items if a.get("slug") != slug]
+    if len(new_items) == len(items):
+        return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, error="Article not found."))
+    save_articles(new_items)
+    return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, message="Article deleted."))
 
 @app.get("/admin/upload-images")
 def admin_upload_page(request: Request, section: str = "reception", user: str = Depends(verify_admin)):

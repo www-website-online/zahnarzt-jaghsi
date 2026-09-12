@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Articles Admin{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <h1>Articles Admin</h1>
+  <p>Logged in as {{ admin_user }}. Create, edit and publish clinic articles.</p>
+</section>
+
+{% if admin_message %}<p class="form-success">{{ admin_message }}</p>{% endif %}
+{% if admin_error %}<p class="form-error">{{ admin_error }}</p>{% endif %}
+
+<section class="two-column">
+  <div class="column">
+    <form class="contact-form-wrap" method="post" action="/admin/articles">
+      <h3>{{ "Edit Article" if edit_article else "New Article" }}</h3>
+      <label>Slug (optional)
+        <input type="text" name="slug" value="{{ edit_article.slug if edit_article else '' }}" placeholder="implantatprothetik-berlin">
+      </label>
+      <label>Title DE *
+        <input type="text" name="title_de" required value="{{ edit_article.title_de if edit_article else '' }}">
+      </label>
+      <label>Title AR
+        <input type="text" name="title_ar" value="{{ edit_article.title_ar if edit_article else '' }}">
+      </label>
+      <label>Excerpt DE
+        <textarea name="excerpt_de" rows="3">{{ edit_article.excerpt_de if edit_article else '' }}</textarea>
+      </label>
+      <label>Excerpt AR
+        <textarea name="excerpt_ar" rows="3">{{ edit_article.excerpt_ar if edit_article else '' }}</textarea>
+      </label>
+      <label>Content DE
+        <textarea name="content_de" rows="8">{{ edit_article.content_de if edit_article else '' }}</textarea>
+      </label>
+      <label>Content AR
+        <textarea name="content_ar" rows="8">{{ edit_article.content_ar if edit_article else '' }}</textarea>
+      </label>
+      <label>Category
+        <input type="text" name="category" value="{{ edit_article.category if edit_article else 'General' }}">
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="draft" {% if edit_article and edit_article.status == 'draft' %}selected{% endif %}>Draft</option>
+          <option value="published" {% if edit_article and edit_article.status == 'published' %}selected{% endif %}>Published</option>
+        </select>
+      </label>
+      <button class="btn-primary" type="submit">Save Article</button>
+    </form>
+  </div>
+
+  <div class="column">
+    <article class="info-box">
+      <h3>Published & Draft Articles</h3>
+      {% for a in articles_admin %}
+      <div class="admin-article-row">
+        <div>
+          <strong>{{ a.title_de }}</strong><br>
+          <small>/articles/{{ a.slug }} · {{ a.status }}</small>
+        </div>
+        <div class="admin-article-actions">
+          <form method="post" action="/admin/articles/edit">
+            <input type="hidden" name="slug" value="{{ a.slug }}">
+            <button class="btn-secondary" type="submit">Edit</button>
+          </form>
+          <form method="post" action="/admin/articles/delete" onsubmit="return confirm('Delete article?');">
+            <input type="hidden" name="slug" value="{{ a.slug }}">
+            <button class="btn-secondary" type="submit">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p>No articles yet.</p>
+      {% endfor %}
+    </article>
+  </div>
+</section>
+{% endblock %}
