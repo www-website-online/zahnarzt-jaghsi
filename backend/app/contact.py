@@ -2,9 +2,14 @@
 import logging
 import os
 import re
+import secrets
 import smtplib
 import ssl
 from email.message import EmailMessage
+from email.headerregistry import Address
+from email.utils import formatdate, make_msgid
+
+from .mail_presentation import presentation
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +31,17 @@ def deliver(name, email, message):
         logger.error("Contact mail configuration has an invalid address")
         return False
     mail = EmailMessage()
-    mail["From"] = sender
+    mail["From"] = Address(display_name="Zahnarztpraxis Dr. Jaghsi", addr_spec=sender)
     mail["To"] = recipient
     mail["Reply-To"] = email
-    mail["Subject"] = "Kontaktanfrage / رسالة تواصل — Zahnarztpraxis"
-    mail.set_content(f"Name: {name}\nE-Mail: {email}\n\n{message}")
+    reference = secrets.token_hex(4).upper()
+    mail["Subject"] = f"Zahnarztpraxis Dr. Jaghsi – Anfrage {reference}"
+    mail["Date"] = formatdate(localtime=False, usegmt=True)
+    mail["Message-ID"] = make_msgid(domain=sender.split('@')[1])
+    plain, html, language = presentation(message, reference, name, 'd', patient_email=email, relay=False)
+    mail.set_content(plain)
+    mail.add_alternative(html, subtype='html')
+    mail["Content-Language"] = language
     try:
         mode = os.getenv("SMTP_SECURITY", "starttls")
         if mode not in {"starttls", "ssl"}:

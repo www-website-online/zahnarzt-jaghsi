@@ -132,6 +132,28 @@ class ApplicationTests(unittest.TestCase):
             self.assertIn('Mailserver', result.text)
             self.assertEqual(deliver.call_count, 2)
 
+    def test_contact_relay_trial_is_limited_to_selected_patient_and_receiver(self):
+        from unittest.mock import Mock
+        relay = Mock()
+        settings = {'MAIL_RELAY_ENABLED':'0', 'MAIL_RELAY_RECEIVE_ENABLED':'1',
+                    'MAIL_RELAY_TEST_PATIENT':'patient@example.com'}
+        data = {'name':'Test', 'email':'Patient@Example.com', 'message':'Appointment test'}
+        with patch.dict(os.environ, settings), patch.object(main.app.state, 'mail_relay', relay), \
+             patch.object(contact, 'configured', return_value=True), \
+             patch.object(contact, 'deliver', return_value=True) as legacy:
+            result = self.post('/kontakt', data)
+            self.assertEqual(result.status_code, 200)
+            relay.submit.assert_called_once_with('Test', 'Patient@Example.com', 'Appointment test')
+            legacy.assert_not_called()
+            result = self.post('/kontakt', {**data, 'email':'other@example.com'})
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(relay.submit.call_count, 1)
+            legacy.assert_called_once_with('Test', 'other@example.com', 'Appointment test')
+            with patch.dict(os.environ, {'MAIL_RELAY_RECEIVE_ENABLED':'0'}):
+                self.assertEqual(self.post('/kontakt', data).status_code, 200)
+                self.assertEqual(relay.submit.call_count, 1)
+                self.assertEqual(legacy.call_count, 2)
+
     def test_contact_smtp_acceptance_refusal_and_tls(self):
         environment = {'SMTP_HOST': 'smtp.example.com', 'SMTP_FROM': 'site@example.com', 'CONTACT_TO': 'clinic@example.com', 'SMTP_SECURITY': 'starttls'}
         with patch.dict(os.environ, environment), patch('backend.app.contact.smtplib.SMTP') as smtp:
@@ -142,6 +164,13 @@ class ApplicationTests(unittest.TestCase):
             mail = connection.send_message.call_args.args[0]
             self.assertEqual(mail['Reply-To'], 'patient@example.com')
             self.assertEqual(mail['To'], 'clinic@example.com')
+            self.assertEqual(mail['From'].addresses[0].display_name, 'Zahnarztpraxis Dr. Jaghsi')
+            self.assertEqual(mail['From'].addresses[0].addr_spec, 'site@example.com')
+            self.assertRegex(str(mail['Subject']), r'^Zahnarztpraxis Dr\. Jaghsi – Anfrage [A-F0-9]{8}$')
+            self.assertEqual(mail.get_content_type(), 'multipart/alternative')
+            self.assertIn('Test message', mail.get_body(preferencelist=('plain',)).get_content())
+            self.assertIn('Test message', mail.get_body(preferencelist=('html',)).get_content())
+            self.assertIn('patient@example.com', mail.get_body(preferencelist=('plain',)).get_content())
             connection.send_message.return_value = {'clinic@example.com': (550, b'refused')}
             self.assertFalse(contact.deliver('Name', 'patient@example.com', 'Test message'))
 

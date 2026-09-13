@@ -1,5 +1,8 @@
 # Deployment completed — 2026-09-12
 
+Update 2026-09-13: contact SMTP is now enabled; see [SMTP_ACTIVATED.md](SMTP_ACTIVATED.md).
+The report below records the original deployment state.
+
 Published at 23:35:59 UTC. The application switch took approximately 0.91 seconds.
 25 release files were deployed and checksum-verified. All 27 legacy content files
 were copied and checksum-verified under `/var/lib/zahnarzt`; the originals remain

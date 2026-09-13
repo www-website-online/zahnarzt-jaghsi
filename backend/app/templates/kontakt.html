@@ -13,7 +13,7 @@
             <h2>{{ t.contact_form_h }}</h2>
 
             {% if success %}
-                <p class="form-success">{{ t.contact_success }}</p>
+                <p class="form-success">{% if relay_queued %}{% if lang == 'ar' %}شكرًا لكم. استلمنا رسالتكم لإيصالها إلى العيادة. ستصلكم الردود عبر البريد الإلكتروني.{% else %}Vielen Dank. Wir haben Ihre Nachricht zur Weiterleitung an die Praxis erhalten. Antworten erhalten Sie per E-Mail.{% endif %}{% else %}{{ t.contact_success }}{% endif %}</p>
             {% endif %}
 
             {% if contact_error %}<p class="form-error" role="alert">{{ contact_error }}</p>{% endif %}

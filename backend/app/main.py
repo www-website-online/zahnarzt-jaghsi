@@ -1,4 +1,6 @@
 import json
+import asyncio
+from contextlib import suppress
 import logging
 import math
 from contextlib import asynccontextmanager
@@ -17,7 +19,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import PlainTextResponse, Response, RedirectResponse, JSONResponse
-from . import contact, storage
+from . import contact, storage, mail_relay
 from .storage import DATA_DIR, OPTIMIZED_DIR, MANIFEST_PATH, ARTICLES_PATH
 from .translations import I18N
 from .security import COOKIE, TOKEN_TTL, make_token, valid_token, verify_csrf, limiter, RequestSizeLimit, BodyTooLarge
@@ -26,7 +28,18 @@ from .security import COOKIE, TOKEN_TTL, make_token, valid_token, verify_csrf, l
 @asynccontextmanager
 async def lifespan(app):
     storage.initialize()
-    yield
+    app.state.mail_relay = None
+    relay_task = None
+    if mail_relay.receiving():
+        app.state.mail_relay = mail_relay.Relay(mail_relay.Settings.from_environment())
+        relay_task = asyncio.create_task(app.state.mail_relay.run())
+    try:
+        yield
+    finally:
+        if relay_task:
+            relay_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await relay_task
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -678,7 +691,21 @@ def contact_submit(request: Request, name: str = Form("", max_length=120),
     name, email, message = name.strip(), email.strip(), message.strip()
     if website or not name or '\n' in name or '\r' in name or not contact.valid_email(email) or not message:
         return failed('contact_invalid', 422)
-    if not contact.deliver(name, email, message):
+    if mail_relay.use_for_patient(email):
+        relay = getattr(request.app.state, 'mail_relay', None)
+        if relay is None:
+            return failed('contact_unavailable', 503)
+        try:
+            relay.submit(name, email, message)
+        except (mail_relay.RelayError, mail_relay.relay_mail.InvalidMail) as exc:
+            code = exc.status if isinstance(exc, mail_relay.RelayError) else 422
+            key = 'contact_rate_limit' if code == 429 else 'contact_invalid' if code == 422 else 'contact_failed'
+            return failed(key, code)
+        except (OSError, mail_relay.sqlite3.Error):
+            logger.error('Relay submission storage unavailable')
+            return failed('contact_failed', 503)
+        ctx['relay_queued'] = True
+    elif not contact.deliver(name, email, message):
         return failed('contact_failed', 502)
     ctx['success'] = True
     return templates.TemplateResponse(request, "kontakt.html", ctx)
@@ -988,3 +1015,33 @@ def admin_delete_all_images(request: Request, user: str = Depends(verify_admin))
             _delete_optimized_files(img)
 
     return _render_admin_page(request, user=user, upload_success="Deleted all uploaded gallery images.")
+
+
+@app.post(mail_relay.ENDPOINT)
+async def relay_inbound(request: Request):
+    relay = getattr(request.app.state, 'mail_relay', None)
+    if relay is None or not mail_relay.receiving():
+        raise HTTPException(404, 'Not found')
+    chunks, size = [], 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > mail_relay.MAX_WEBHOOK:
+            raise HTTPException(413, 'message_too_large')
+        chunks.append(chunk)
+    try:
+        result = await asyncio.to_thread(
+            relay.receive, b''.join(chunks), request.headers.get('X-Relay-Timestamp', ''),
+            request.headers.get('X-Relay-Nonce', ''), request.headers.get('X-Relay-Signature', ''))
+    except mail_relay.RelayError as exc:
+        return JSONResponse({'error': exc.code}, status_code=exc.status, headers={'Cache-Control': 'no-store'})
+    except (OSError, mail_relay.sqlite3.Error):
+        logger.error('Relay inbound storage unavailable')
+        return JSONResponse({'error': 'storage_unavailable'}, status_code=503)
+    return JSONResponse({'status': result}, status_code=202, headers={'Cache-Control': 'no-store'})
+
+
+@app.get('/admin/mail-relay/status')
+def relay_status(request: Request, user: str = Depends(verify_admin)):
+    relay = getattr(request.app.state, 'mail_relay', None)
+    return {'enabled': mail_relay.enabled(), 'receiving': mail_relay.receiving(),
+            **(relay.status() if relay else {'outbox': {}, 'review': []})}

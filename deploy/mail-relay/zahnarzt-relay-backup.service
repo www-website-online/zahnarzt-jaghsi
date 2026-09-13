@@ -1,0 +1,14 @@
+[Unit]
+Description=Verified private clinic relay backup
+ConditionPathExists=/var/lib/zahnarzt-relay/relay.sqlite3
+
+[Service]
+Type=oneshot
+UMask=0077
+EnvironmentFile=/etc/zahnarzt/mail-relay.env
+WorkingDirectory=/var/www/zahnarzt-jaghsi
+ExecStart=/var/www/zahnarzt-jaghsi/.venv/bin/python scripts/relay_admin.py backup /var/backups/zahnarzt-relay
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zahnarzt-relay /var/backups/zahnarzt-relay

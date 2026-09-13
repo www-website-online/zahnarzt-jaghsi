@@ -1,0 +1,2 @@
+# Isolated sync virtualenv only; not the website's production dependencies.
+google-auth[requests]>=2.40,<3

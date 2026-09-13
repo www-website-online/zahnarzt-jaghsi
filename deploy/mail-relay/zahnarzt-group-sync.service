@@ -1,0 +1,23 @@
+[Unit]
+Description=Refresh authorized clinic Google Group members
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=www-data
+WorkingDirectory=/var/www/zahnarzt-jaghsi
+EnvironmentFile=/etc/zahnarzt/mail-relay.env
+EnvironmentFile=/etc/zahnarzt/group-sync.env
+ExecStart=/opt/zahnarzt-group-sync/bin/python /var/www/zahnarzt-jaghsi/scripts/sync_relay_group.py
+TimeoutStartSec=55
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/zahnarzt-relay-members
+
+[Install]
+WantedBy=multi-user.target
