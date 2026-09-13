@@ -12,6 +12,7 @@
         <article class="contact-form-wrap">
             <h3>Upload Section Images</h3>
             <form class="contact-form" method="post" action="/admin/upload-images?lang={{ lang }}&section={{ selected_section }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <label>
                     Section (fixed slot)
                     <select name="section" required>
@@ -30,7 +31,7 @@
                     <input type="text" name="title_ar" placeholder="منطقة الاستقبال">
                 </label>
                 <label>
-                    Image(s) (JPG/PNG/WEBP, max {{ 10 }}MB each)
+                    Image(s) (JPG/PNG/WEBP, max {{ max_upload_mb }}MB each; up to {{ max_upload_files }} files / 30MB total)
                     <input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple required>
                 </label>
                 <button class="btn-primary" type="submit">Upload & Optimize</button>
@@ -38,10 +39,12 @@
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem;">
                 <form method="post" action="/admin/upload-images/delete-section?lang={{ lang }}&section={{ selected_section }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" name="section" value="{{ selected_section }}">
                     <button class="btn-secondary" type="submit" style="width:100%;">Delete Section Images</button>
                 </form>
-                <form method="post" action="/admin/upload-images/delete-all?lang={{ lang }}&section={{ selected_section }}" onsubmit="return confirm('Delete all uploaded images?');">
+                <form method="post" action="/admin/upload-images/delete-all?lang={{ lang }}&section={{ selected_section }}" data-confirm="Delete all uploaded images?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button class="btn-secondary" type="submit" style="width:100%;">Delete All Uploaded</button>
                 </form>
             </div>
@@ -80,17 +83,20 @@
                     <img src="{{ img.thumb }}" alt="{{ img.alt }}" style="width:92px;height:58px;object-fit:cover;border-radius:.45rem;display:block;">
                     <div>
                         <div style="font-weight:700;font-size:.92rem;">{{ img.alt }}</div>
+                        {% if img.file_missing %}<p class="form-error">Image file missing. Upload a replacement; the original record is preserved.</p>{% endif %}
                         <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem;">
                             {% if img.is_main %}
                             <span class="btn-secondary" style="padding:.32rem .55rem;min-height:auto;">Main</span>
                             {% else %}
                             <form method="post" action="/admin/upload-images/set-main?lang={{ lang }}&section={{ selected_section }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="section" value="{{ selected_section }}">
                                 <input type="hidden" name="image_id" value="{{ img.id }}">
                                 <button class="btn-secondary" type="submit" style="padding:.32rem .55rem;min-height:auto;">Set as Main</button>
                             </form>
                             {% endif %}
-                            <form method="post" action="/admin/upload-images/delete-image?lang={{ lang }}&section={{ selected_section }}" onsubmit="return confirm('Delete this image?');">
+                            <form method="post" action="/admin/upload-images/delete-image?lang={{ lang }}&section={{ selected_section }}" data-confirm="Delete this image?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="section" value="{{ selected_section }}">
                                 <input type="hidden" name="image_id" value="{{ img.id }}">
                                 <button class="btn-secondary" type="submit" style="padding:.32rem .55rem;min-height:auto;">Delete</button>

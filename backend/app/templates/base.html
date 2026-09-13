@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="canonical" href="{{ canonical_url }}" />
     <link rel="alternate" hreflang="de" href="{{ alt_de }}" />
-    <link rel="alternate" hreflang="ar" href="{{ alt_ar }}" />
+    {% if alt_ar %}<link rel="alternate" hreflang="ar" href="{{ alt_ar }}" />{% endif %}
     <link rel="alternate" hreflang="x-default" href="{{ alt_de }}" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="{{ clinic_name }}{% block og_title_suffix %}{% endblock %}" />
@@ -20,21 +20,21 @@
     <meta name="twitter:title" content="{{ clinic_name }}{% block tw_title_suffix %}{% endblock %}" />
     <meta name="twitter:description" content="{{ meta_description }}" />
     <meta name="twitter:image" content="{{ site_url }}/static/logo.png" />
-    <link rel="stylesheet" href="/static/styles.css?v=6" />
-    <script type="application/ld+json">{{ schema_json|tojson }}</script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260912-1" />
+    <script nonce="{{ request.state.csp_nonce }}" type="application/ld+json">{{ schema_json|tojson }}</script>
 </head>
 <body class="{{ 'rtl' if is_rtl else 'ltr' }}">
 <header class="header">
     <div class="container header-inner">
-        <a class="logo" href="/?lang={{ lang }}" aria-label="Startseite">
-            <img src="/static/logo.png" alt="Praxis Logo" class="logo-img">
+        <a class="logo" href="/?lang={{ lang }}" aria-label="{{ t.nav_home }}">
+            <img src="/static/logo-small.webp" alt="{{ clinic_name }}" class="logo-img" width="56" height="56">
             <div>
                 <div class="logo-title">{{ t.clinic_tag }}</div>
                 <div class="logo-subtitle">M.Sc. Abdulaziz Jaghsi</div>
             </div>
         </a>
 
-        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="{{ 'القائمة' if lang == 'ar' else 'Menü' }}">
             <span></span>
             <span></span>
             <span></span>
@@ -71,16 +71,28 @@
     </div>
 </footer>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
 (function () {
+    document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+        });
+    });
     const toggle = document.querySelector('.nav-toggle');
     const nav = document.getElementById('site-nav');
     if (!toggle || !nav) return;
 
+    function syncVisibility() {
+        const mobile = window.matchMedia('(max-width: 980px)').matches;
+        nav.inert = mobile && nav.getAttribute('data-open') !== 'true';
+    }
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
     toggle.addEventListener('click', function () {
         const open = nav.getAttribute('data-open') === 'true';
         nav.setAttribute('data-open', String(!open));
         toggle.setAttribute('aria-expanded', String(!open));
+        syncVisibility();
     });
 
     nav.querySelectorAll('a').forEach(function (link) {
@@ -88,6 +100,7 @@
             if (window.matchMedia('(max-width: 980px)').matches) {
                 nav.setAttribute('data-open', 'false');
                 toggle.setAttribute('aria-expanded', 'false');
+                syncVisibility();
             }
         });
     });

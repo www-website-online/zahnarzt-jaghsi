@@ -9,7 +9,7 @@
         <p>{{ t.home_intro }}</p>
 
         <div class="hero-actions">
-            <a class="btn-primary" href="tel:+49306851044">{{ t.home_call }}</a>
+            <a class="btn-primary" href="tel:{{ phone_tel }}">{{ t.home_call }}</a>
             <a class="btn-secondary" href="/kontakt?lang={{ lang }}">{{ t.home_contact }}</a>
         </div>
 
@@ -28,8 +28,8 @@
 
     <aside class="hero-card">
         <h3>{{ t.home_glance }}</h3>
-        <p><strong>{{ t.address_label }}:</strong><br>Karl-Marx-Straße 214<br>12055 Berlin</p>
-        <p><strong>{{ t.hours_label }}:</strong><br>Mo, Di, Do: 09:00 – 18:00<br>Mi, Fr: 09:00 – 15:00</p>
+        <p><strong>{{ t.address_label }}:</strong><br>{{ address }}</p>
+        <p><strong>{{ t.hours_label }}:</strong><br>{{ opening_hours }}</p>
         <p><strong>{{ t.phone_label }}:</strong> {{ phone_landline }}<br><strong>{{ t.mobile_label }}:</strong> {{ phone_mobile }}</p>
         <a class="link"
            href="https://www.google.com/maps/place/%D8%AF%D9%83%D8%AA%D9%88%D8%B1+%D8%A7%D9%84%D8%A3%D8%B3%D9%86%D8%A7%D9%86+%D8%B9%D8%A8%D8%AF+%D8%A7%D9%84%D8%B9%D8%B2%D9%8A%D8%B2+%D8%AC%D8%BA%D8%B5%D9%8A%E2%80%AD/@52.4707366,13.4411629,17z/data=!3m1!4b1!4m6!3m5!1s0x47a84ff2c86a0db9:0x65a0a118fc7cc1a5!8m2!3d52.4707366!4d13.4411629!16s%2Fg%2F11ln_590cn?entry=ttu"
@@ -40,7 +40,7 @@
 </section>
 
 <section class="page-header" style="margin-top:1.4rem;">
-    <h1>{{ t.home_why_h }}</h1>
+    <h2>{{ t.home_why_h }}</h2>
     <p>{{ t.home_why_p }}</p>
 </section>
 
@@ -60,11 +60,11 @@
 </section>
 
 <section class="page-header" style="margin-top:1.6rem;">
-    <h1>{{ t.gallery_h }}</h1>
+    <h2>{{ t.gallery_h }}</h2>
     <p>{{ t.gallery_p }}</p>
 </section>
 
-<section class="clinic-gallery" aria-label="Clinic gallery">
+<section class="clinic-gallery" aria-label="{{ t.gallery_h }}">
     {% for image in gallery_images %}
     <button class="gallery-item" type="button" data-slot="{{ image.slot }}" data-full="{{ image.full }}" data-alt="{{ image.alt }}">
         <img src="{{ image.src }}" {% if image.srcset %}srcset="{{ image.srcset }}" sizes="(max-width: 640px) 100vw, (max-width: 980px) 50vw, 33vw"{% endif %} alt="{{ image.alt }}" loading="{% if loop.first %}eager{% else %}lazy{% endif %}" fetchpriority="{% if loop.first %}high{% else %}auto{% endif %}" width="1600" height="1000">
@@ -74,12 +74,12 @@
 </section>
 
 <dialog class="lightbox" id="gallery-lightbox">
-    <button type="button" class="lightbox-close" aria-label="Close">×</button>
+    <button type="button" class="lightbox-close" aria-label="{{ 'إغلاق' if lang == 'ar' else 'Schließen' }}">×</button>
     <img src="" alt="" class="lightbox-image">
     <p class="lightbox-caption"></p>
 </dialog>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
 (function () {
     const items = document.querySelectorAll('.gallery-item');
     const lightbox = document.getElementById('gallery-lightbox');
@@ -92,7 +92,7 @@
 
     const navWrap = document.createElement('div');
     navWrap.className = 'lightbox-nav';
-    navWrap.innerHTML = '<button type="button" class="btn-secondary prev">‹</button><button type="button" class="btn-secondary next">›</button>';
+    navWrap.innerHTML = '<button type="button" class="btn-secondary prev" aria-label="{{ 'الصورة السابقة' if lang == 'ar' else 'Vorheriges Bild' }}">‹</button><button type="button" class="btn-secondary next" aria-label="{{ 'الصورة التالية' if lang == 'ar' else 'Nächstes Bild' }}">›</button>';
     lightbox.appendChild(navWrap);
 
     const prevBtn = navWrap.querySelector('.prev');
@@ -134,6 +134,10 @@
         render();
     });
 
+    lightbox.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight') nextBtn.click();
+        if (event.key === 'ArrowLeft') prevBtn.click();
+    });
     closeBtn.addEventListener('click', () => lightbox.close());
     lightbox.addEventListener('click', (e) => {
         const bounds = lightbox.getBoundingClientRect();

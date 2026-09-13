@@ -13,9 +13,12 @@
 <section class="two-column">
   <div class="column">
     <form class="contact-form-wrap" method="post" action="/admin/articles">
-      <h3>{{ "Edit Article" if edit_article else "New Article" }}</h3>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <h3>{{ "Edit Article" if original_slug else "New Article" }}</h3>
+      <input type="hidden" name="original_slug" value="{{ original_slug }}">
+      <input type="hidden" name="revision" value="{{ edit_article.get('revision', edit_article.get('updated_at', '')) if edit_article else '' }}">
       <label>Slug (optional)
-        <input type="text" name="slug" value="{{ edit_article.slug if edit_article else '' }}" placeholder="implantatprothetik-berlin">
+        <input type="text" name="slug" value="{{ edit_article.slug if edit_article else '' }}" placeholder="implantatprothetik-berlin" maxlength="160" {% if original_slug %}readonly{% endif %}>
       </label>
       <label>Title DE *
         <input type="text" name="title_de" required value="{{ edit_article.title_de if edit_article else '' }}">
@@ -59,10 +62,12 @@
         </div>
         <div class="admin-article-actions">
           <form method="post" action="/admin/articles/edit">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="slug" value="{{ a.slug }}">
             <button class="btn-secondary" type="submit">Edit</button>
           </form>
-          <form method="post" action="/admin/articles/delete" onsubmit="return confirm('Delete article?');">
+          <form method="post" action="/admin/articles/delete" data-confirm="Delete article?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="slug" value="{{ a.slug }}">
             <button class="btn-secondary" type="submit">Delete</button>
           </form>

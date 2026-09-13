@@ -2,13 +2,14 @@
 {% block title_suffix %} – {{ article.title }}{% endblock %}
 
 {% block content %}
-<script type="application/ld+json">{{ article_schema|tojson }}</script>
+<script nonce="{{ request.state.csp_nonce }}" type="application/ld+json">{{ article_schema|tojson }}</script>
 
 <article class="article-detail">
-  <div class="article-meta">{{ article.category }} · {{ article.reading_minutes }} min</div>
-  <h1>{{ article.title }}</h1>
+  <div class="article-meta">{{ article.category }} · {{ article.reading_minutes }} {{ "دقيقة" if lang == "ar" else "Min." }}</div>
+  {% if article.content_lang != lang %}<p class="form-hint">{{ "هذا المقال متاح حالياً باللغة الألمانية." if lang == "ar" else "Dieser Artikel ist derzeit auf Deutsch verfügbar." }}</p>{% endif %}
+  <h1 lang="{{ article.content_lang }}" dir="{{ 'rtl' if article.content_lang == 'ar' else 'ltr' }}">{{ article.title }}</h1>
   <p class="article-excerpt">{{ article.excerpt }}</p>
-  <div class="article-body">{{ article.content|replace('\n', '<br>')|safe }}</div>
+  <div class="article-body" lang="{{ article.content_lang }}" dir="{{ 'rtl' if article.content_lang == 'ar' else 'ltr' }}">{{ article.content }}</div>
 
   <div class="article-cta">
     <a class="btn-primary" href="https://www.doctolib.de/zahnmedizin/berlin/abdulaziz-jaghsi" target="_blank" rel="noopener noreferrer">{{ t.book_btn }}</a>

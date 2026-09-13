@@ -1,43 +1,99 @@
 import json
+import logging
+import math
+from contextlib import asynccontextmanager
+from html import escape
+from urllib.parse import urlsplit
 import os
 import re
 import secrets
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse, Response, RedirectResponse, JSONResponse
+from . import contact, storage
+from .storage import DATA_DIR, OPTIMIZED_DIR, MANIFEST_PATH, ARTICLES_PATH
+from .translations import I18N
+from .security import COOKIE, TOKEN_TTL, make_token, valid_token, verify_csrf, limiter, RequestSizeLimit, BodyTooLarge
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app):
+    storage.initialize()
+    yield
+
+
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(RequestSizeLimit)
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(storage.StorageError)
+async def storage_failure(request, exc):
+    return PlainTextResponse("Content temporarily unavailable. Please try again later.", status_code=503)
+
+
+@app.exception_handler(BodyTooLarge)
+async def body_too_large(request, exc):
+    return PlainTextResponse("Request too large", status_code=413)
+
+
+@app.middleware("http")
+async def browser_security(request: Request, call_next):
+    if request.url.path in {"/static/sitemap.xml", "/static/robots.txt"}:
+        return RedirectResponse("/" + request.url.path.rsplit("/", 1)[1], status_code=308)
+    token = request.cookies.get(COOKIE, "")
+    if not valid_token(token):
+        token = make_token()
+    request.state.csrf_token = token
+    request.state.csp_nonce = secrets.token_urlsafe(24)
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if "text/html" in response.headers.get("content-type", ""):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data: https:; "
+            "style-src 'self' 'unsafe-inline'; font-src 'self' data:; "
+            f"script-src 'self' 'nonce-{request.state.csp_nonce}'; "
+            "connect-src 'self'; form-action 'self'; base-uri 'none'; "
+            "object-src 'none'; frame-ancestors 'self'"
+        )
+    if request.url.path.startswith('/admin') or request.url.path == '/kontakt':
+        response.headers['Cache-Control'] = 'no-store'
+        if request.method == 'GET':
+            response.set_cookie(COOKIE, token, max_age=TOKEN_TTL, httponly=True,
+                                secure=request.url.scheme == 'https', samesite='strict', path='/')
+    return response
+
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 GALLERY_DIR = STATIC_DIR / "gallery"
-RUNTIME_UPLOAD_ROOT = Path("/tmp/zahnarzt-gallery")
-OPTIMIZED_DIR = RUNTIME_UPLOAD_ROOT / "optimized"
-MANIFEST_PATH = RUNTIME_UPLOAD_ROOT / "manifest.json"
-ARTICLES_PATH = RUNTIME_UPLOAD_ROOT / "articles.json"
-
-RUNTIME_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-OPTIMIZED_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-app.mount("/uploads", StaticFiles(directory=str(RUNTIME_UPLOAD_ROOT)), name="uploads")
+app.mount("/uploads/optimized", StaticFiles(directory=str(OPTIMIZED_DIR), check_dir=False), name="uploads")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 CLINIC_NAME = os.getenv("CLINIC_NAME", "ZAHNARZTPRAXIS – M.Sc. Abdulaziz Jaghsi")
 ADDRESS = os.getenv("CLINIC_ADDRESS", "Karl-Marx-Straße 214, 12055 Berlin")
 PHONE_LANDLINE = os.getenv("CLINIC_PHONE_LANDLINE", "(030) 685 10 44")
 PHONE_MOBILE = os.getenv("CLINIC_PHONE_MOBILE", "015560 555345")
+PHONE_TEL = os.getenv("CLINIC_PHONE_TEL", "+49306851044")
+OPENING_HOURS_DE = os.getenv("CLINIC_HOURS_DE", "Mo, Di, Do: 09:00–18:00; Mi, Fr: 09:00–15:00")
+OPENING_HOURS_AR = os.getenv("CLINIC_HOURS_AR", "الاثنين والثلاثاء والخميس: 09:00–18:00؛ الأربعاء والجمعة: 09:00–15:00")
 
 ADMIN_USER = os.getenv("ADMIN_UPLOAD_USER", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_UPLOAD_PASSWORD", "ChangeMeNow123!")
-MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
+ADMIN_PASSWORD = os.getenv("ADMIN_UPLOAD_PASSWORD", "")
+MAX_UPLOAD_MB = min(10, max(1, int(os.getenv("MAX_UPLOAD_MB", "10"))))
+MAX_UPLOAD_FILES = 8
+MAX_BATCH_BYTES = 30 * 1024 * 1024
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 SUPPORTED_LANGS = {"de", "ar"}
@@ -63,222 +119,6 @@ SEO_META = {
 
 security = HTTPBasic()
 
-I18N = {
-    "de": {
-        "clinic_tag": "Zahnarztpraxis Berlin",
-        "nav_home": "Startseite",
-        "nav_services": "Leistungen",
-        "nav_about": "Über uns",
-        "nav_contact": "Kontakt",
-        "book_btn": "Termin buchen",
-        "phone_label": "Telefon",
-        "mobile_label": "Mobil",
-        "switch_lang": "العربية",
-        "home_title_suffix": " – Ihre Zahnarztpraxis in Neukölln",
-        "home_eyebrow": "Moderne Zahnmedizin in Berlin-Neukölln",
-        "home_h1": "Ihr Lächeln in erfahrenen Händen",
-        "home_intro": "Präzise Diagnostik, hochwertige Prothetik und ein einfühlsames Team: Wir begleiten Sie von der ersten Beratung bis zum langfristigen Behandlungserfolg.",
-        "home_call": "Jetzt anrufen",
-        "home_contact": "Kontakt aufnehmen",
-        "home_b1": "Schwerpunkt: Prothetik & Implantatprothetik",
-        "home_b2": "Termine schnell online über Doctolib",
-        "home_b3": "Deutsch, Arabisch und Englisch",
-        "home_kpi1": "Behandlungssprachen",
-        "home_kpi2": "Individuelle Beratung",
-        "home_kpi3": "Lage in Neukölln",
-        "home_glance": "Praxis auf einen Blick",
-        "address_label": "Adresse",
-        "hours_label": "Sprechzeiten",
-        "route_btn": "Route in Google Maps öffnen",
-        "home_why_h": "Warum Patientinnen und Patienten uns vertrauen",
-        "home_why_p": "Wir kombinieren wissenschaftlich fundierte Zahnmedizin mit klarer Kommunikation und einem ruhigen Behandlungserlebnis.",
-        "home_c1_h": "Individuelle Therapiepläne",
-        "home_c1_p": "Jeder Befund ist einzigartig. Deshalb planen wir strukturiert, transparent und passend zu Ihrem Alltag.",
-        "home_c2_h": "Funktion trifft Ästhetik",
-        "home_c2_p": "Von Kronen bis Implantatprothetik achten wir auf langfristige Stabilität und ein natürliches Erscheinungsbild.",
-        "home_c3_h": "Kurze Wege, klare Abläufe",
-        "home_c3_p": "Direkte Terminbuchung, gute Erreichbarkeit und verständliche Aufklärung sorgen für einen entspannten Praxisbesuch.",
-        "gallery_h": "Einblicke in unsere Praxis",
-        "gallery_p": "Professionelle Galerie mit Beispielbildern. Neue Bilder können im Admin-Bereich hochgeladen werden.",
-        "gallery_zoom": "Bild vergrößern",
-        "gallery_i1": "Empfangsbereich",
-        "gallery_i2": "Behandlungsraum",
-        "gallery_i3": "Beratung mit Patient",
-        "gallery_i4": "Digitale Diagnostik",
-        "gallery_i5": "Prophylaxe-Behandlung",
-        "gallery_i6": "Wartebereich",
-        "services_title_suffix": " – Leistungen",
-        "services_h1": "Unsere Leistungen",
-        "services_intro": "Moderne Zahnmedizin mit Schwerpunkt Prothetik: Wir entwickeln für Sie präzise, nachhaltige und ästhetisch überzeugende Lösungen.",
-        "about_title_suffix": " – Über uns",
-        "about_h1": "Über unsere Praxis",
-        "about_intro": "Bei uns stehen Fachkompetenz, Respekt und verständliche Kommunikation im Mittelpunkt. Unser Ziel ist eine langfristig gesunde und ästhetische Zahnsituation für Sie.",
-        "contact_title_suffix": " – Kontakt",
-        "contact_h1": "Kontakt & Termin",
-        "contact_intro": "Sie möchten einen Termin vereinbaren oder haben eine Frage zu einer Behandlung? Wir beraten Sie gerne persönlich.",
-        "contact_form_h": "Kontaktformular",
-        "contact_success": "Vielen Dank. Ihre Nachricht wurde erfolgreich gesendet.",
-        "name_label": "Ihr Name",
-        "email_label": "E-Mail",
-        "message_label": "Ihre Nachricht",
-        "send_btn": "Nachricht senden",
-        "contact_hint": "Bitte senden Sie keine Notfälle per E-Mail. In dringenden Fällen rufen Sie uns direkt an.",
-        "contact_data_h": "Praxisdaten",
-        "online_booking_h": "Online-Termin",
-        "online_booking_p": "Buchen Sie Ihren Termin bequem online über Doctolib.",
-        "service_1_h": "Prothetik (Schwerpunkt)",
-        "service_1_p": "Individuelle Konzepte für festen und herausnehmbaren Zahnersatz.",
-        "service_1_l1": "Kronen und Brücken",
-        "service_1_l2": "Teil- und Vollprothesen",
-        "service_1_l3": "Kombinationsversorgungen",
-        "service_2_h": "Implantatprothetik",
-        "service_2_p": "Stabiler Zahnersatz auf Implantaten mit natürlicher Funktion.",
-        "service_2_l1": "Einzelzahnersatz",
-        "service_2_l2": "Implantatgetragene Brücken",
-        "service_2_l3": "Festsitzende und herausnehmbare Lösungen",
-        "service_3_h": "Ästhetische Zahnheilkunde",
-        "service_3_p": "Harmonische Ergebnisse für ein gesundes und selbstbewusstes Lächeln.",
-        "service_3_l1": "Zahnfarbene Füllungen",
-        "service_3_l2": "Veneers",
-        "service_3_l3": "Rekonstruktionen im Frontzahnbereich",
-        "service_4_h": "Prophylaxe & Zahnreinigung",
-        "service_4_p": "Professionelle Vorsorge zum Schutz von Zähnen und Zahnfleisch.",
-        "service_4_l1": "Professionelle Zahnreinigung",
-        "service_4_l2": "Mundhygiene-Beratung",
-        "service_4_l3": "Regelmäßige Kontrollen",
-        "service_5_h": "Schmerzbehandlung",
-        "service_5_p": "Schnelle und strukturierte Hilfe bei akuten Beschwerden.",
-        "service_5_l1": "Akutdiagnostik",
-        "service_5_l2": "Entzündungs- und Schmerztherapie",
-        "service_5_l3": "Planung der Folgetherapie",
-        "service_6_h": "Beratung & Zweitmeinung",
-        "service_6_p": "Klare Einschätzung Ihrer Situation mit transparenten Optionen.",
-        "service_6_l1": "Ausführliche Befundbesprechung",
-        "service_6_l2": "Therapiealternativen im Überblick",
-        "service_6_l3": "Verständliche Kostenaufklärung",
-        "about_doctor_h": "M.Sc. Abdulaziz Jaghsi",
-        "about_doctor_p": "Mit Spezialisierung in Prothetik bietet Herr Jaghsi hochwertige, wissenschaftlich fundierte Behandlungskonzepte für funktionelle und ästhetische Ergebnisse.",
-        "about_focus_h": "Behandlungsschwerpunkte",
-        "about_focus_l1": "Prothetische Versorgungen",
-        "about_focus_l2": "Implantatgetragener Zahnersatz",
-        "about_focus_l3": "Ästhetische Rekonstruktionen",
-        "about_philosophy_h": "Unsere Philosophie",
-        "about_philosophy_l1": "Individuelle Konzepte statt Standardlösungen",
-        "about_philosophy_l2": "Ausführliche Aufklärung vor jeder Behandlung",
-        "about_philosophy_l3": "Einfühlsame Betreuung in ruhiger Atmosphäre",
-        "about_languages_h": "Sprachen",
-        "about_languages_l1": "Deutsch",
-        "about_languages_l2": "Arabisch",
-        "about_languages_l3": "Englisch",
-    },
-    "ar": {
-        "clinic_tag": "عيادة أسنان في برلين",
-        "nav_home": "الرئيسية",
-        "nav_services": "الخدمات",
-        "nav_about": "من نحن",
-        "nav_contact": "التواصل",
-        "book_btn": "احجز موعدًا",
-        "phone_label": "الهاتف",
-        "mobile_label": "الجوال",
-        "switch_lang": "Deutsch",
-        "home_title_suffix": " - عيادتكم في نويكولن",
-        "home_eyebrow": "طب أسنان حديث في برلين نويكولن",
-        "home_h1": "ابتسامتكم بين أيدٍ خبيرة",
-        "home_intro": "تشخيص دقيق، وتعويضات سنية عالية الجودة، وفريق متفهم: نرافقكم من الاستشارة الأولى حتى نجاح العلاج على المدى الطويل.",
-        "home_call": "اتصل الآن",
-        "home_contact": "تواصل معنا",
-        "home_b1": "تركيزنا: التعويضات السنية وزراعة الأسنان",
-        "home_b2": "حجز سريع عبر Doctolib",
-        "home_b3": "الألمانية والعربية والإنجليزية",
-        "home_kpi1": "لغات العلاج",
-        "home_kpi2": "استشارة فردية",
-        "home_kpi3": "موقع مميز",
-        "home_glance": "معلومات سريعة",
-        "address_label": "العنوان",
-        "hours_label": "ساعات العمل",
-        "route_btn": "افتح المسار في خرائط Google",
-        "home_why_h": "لماذا يثق بنا المرضى",
-        "home_why_p": "نجمع بين طب أسنان مبني على العلم وتواصل واضح وتجربة علاج مريحة.",
-        "home_c1_h": "خطط علاج شخصية",
-        "home_c1_p": "كل حالة مختلفة، لذلك نخطط بشكل واضح وشفاف ومناسب لحياتكم اليومية.",
-        "home_c2_h": "وظيفة وجمال",
-        "home_c2_p": "من التيجان إلى التعويضات على الزرعات نركز على الثبات الطويل والمظهر الطبيعي.",
-        "home_c3_h": "خطوات واضحة",
-        "home_c3_p": "حجز مباشر، سهولة وصول، وشرح مفهوم قبل العلاج لتجربة أكثر راحة.",
-        "gallery_h": "جولة داخل العيادة",
-        "gallery_p": "معرض احترافي. يمكن رفع صور جديدة ومعالجتها تلقائيًا من لوحة الإدارة.",
-        "gallery_zoom": "تكبير الصورة",
-        "gallery_i1": "منطقة الاستقبال",
-        "gallery_i2": "غرفة العلاج",
-        "gallery_i3": "استشارة مع المريض",
-        "gallery_i4": "تشخيص رقمي",
-        "gallery_i5": "جلسة وقاية",
-        "gallery_i6": "منطقة الانتظار",
-        "services_title_suffix": " - الخدمات",
-        "services_h1": "خدماتنا",
-        "services_intro": "طب أسنان حديث مع تركيز على التعويضات السنية: نطوّر حلولًا دقيقة ومستدامة وجمالية.",
-        "about_title_suffix": " - من نحن",
-        "about_h1": "عن العيادة",
-        "about_intro": "نضع الخبرة والاحترام والتواصل الواضح في قلب كل زيارة. هدفنا صحة فموية وجمالية طويلة الأمد.",
-        "contact_title_suffix": " - التواصل",
-        "contact_h1": "التواصل وحجز الموعد",
-        "contact_intro": "هل ترغبون بحجز موعد أو لديكم سؤال علاجي؟ يسعدنا مساعدتكم.",
-        "contact_form_h": "نموذج التواصل",
-        "contact_success": "شكرًا لكم، تم إرسال رسالتكم بنجاح.",
-        "name_label": "الاسم",
-        "email_label": "البريد الإلكتروني",
-        "message_label": "الرسالة",
-        "send_btn": "إرسال الرسالة",
-        "contact_hint": "يرجى عدم إرسال الحالات الإسعافية عبر البريد. للحالات العاجلة اتصلوا بنا مباشرة.",
-        "contact_data_h": "بيانات العيادة",
-        "online_booking_h": "حجز أونلاين",
-        "online_booking_p": "احجز موعدك بسهولة عبر Doctolib.",
-        "service_1_h": "التعويضات السنية (الاختصاص)",
-        "service_1_p": "حلول فردية للتعويضات الثابتة والمتحركة.",
-        "service_1_l1": "تيجان وجسور",
-        "service_1_l2": "أطقم جزئية وكاملة",
-        "service_1_l3": "تركيبات مشتركة",
-        "service_2_h": "تعويضات على الزرعات",
-        "service_2_p": "تعويضات ثابتة ومريحة على الزرعات بوظيفة طبيعية.",
-        "service_2_l1": "تعويض سن مفرد",
-        "service_2_l2": "جسور مدعومة بالزرعات",
-        "service_2_l3": "حلول ثابتة ومتحركة",
-        "service_3_h": "طب الأسنان التجميلي",
-        "service_3_p": "نتائج متناغمة لابتسامة صحية وواثقة.",
-        "service_3_l1": "حشوات بلون الأسنان",
-        "service_3_l2": "فينير",
-        "service_3_l3": "ترميمات تجميلية للأسنان الأمامية",
-        "service_4_h": "الوقاية والتنظيف",
-        "service_4_p": "وقاية احترافية لحماية الأسنان واللثة.",
-        "service_4_l1": "تنظيف احترافي للأسنان",
-        "service_4_l2": "إرشادات العناية الفموية",
-        "service_4_l3": "فحوصات دورية",
-        "service_5_h": "علاج الألم",
-        "service_5_p": "مساعدة سريعة ومنظمة للحالات الحادة.",
-        "service_5_l1": "تشخيص الحالات العاجلة",
-        "service_5_l2": "علاج الالتهاب والألم",
-        "service_5_l3": "خطة متابعة علاجية",
-        "service_6_h": "استشارة ورأي ثانٍ",
-        "service_6_p": "تقييم واضح وخيارات علاج شفافة.",
-        "service_6_l1": "مناقشة مفصلة للحالة",
-        "service_6_l2": "عرض بدائل العلاج",
-        "service_6_l3": "توضيح التكاليف بشكل مفهوم",
-        "about_doctor_h": "ماجستير عبد العزيز جغصي",
-        "about_doctor_p": "بخبرة متخصصة في التعويضات السنية يقدّم الدكتور خطط علاج عالية الجودة مبنية على أسس علمية.",
-        "about_focus_h": "محاور العلاج",
-        "about_focus_l1": "التعويضات السنية",
-        "about_focus_l2": "تعويضات مدعومة بالزرعات",
-        "about_focus_l3": "ترميمات تجميلية",
-        "about_philosophy_h": "فلسفتنا",
-        "about_philosophy_l1": "خطط فردية بدل الحلول الموحدة",
-        "about_philosophy_l2": "شرح واضح قبل كل إجراء",
-        "about_philosophy_l3": "رعاية متفهمة في أجواء هادئة",
-        "about_languages_h": "اللغات",
-        "about_languages_l1": "الألمانية",
-        "about_languages_l2": "العربية",
-        "about_languages_l3": "الإنجليزية",
-    },
-}
 
 
 GALLERY_SLOTS = [
@@ -323,12 +163,7 @@ def _to_image_item(raw: dict, section: str) -> dict:
 
 
 def load_manifest() -> dict[str, dict]:
-    if not MANIFEST_PATH.exists():
-        return {}
-    try:
-        raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+    raw = storage.read_json(MANIFEST_PATH, {})
 
     if isinstance(raw, list):
         migrated: dict[str, dict] = {}
@@ -341,7 +176,7 @@ def load_manifest() -> dict[str, dict]:
         return migrated
 
     if not isinstance(raw, dict):
-        return {}
+        raise storage.StorageError("Invalid gallery store")
 
     normalized: dict[str, dict] = {}
     for section, value in raw.items():
@@ -362,7 +197,7 @@ def load_manifest() -> dict[str, dict]:
 
 
 def save_manifest(items: dict[str, dict]) -> None:
-    MANIFEST_PATH.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    storage.write_json(MANIFEST_PATH, items)
 
 
 def get_gallery_slots(lang: str) -> list[dict]:
@@ -410,6 +245,36 @@ def _get_main_image(section_data: dict | None) -> dict | None:
     return images[0]
 
 
+def _existing_image_url(url: str) -> bool:
+    if not isinstance(url, str) or not url.startswith('/uploads/optimized/'):
+        return False
+    name = urlsplit(url).path.removeprefix('/uploads/optimized/')
+    if not name or Path(name).name != name:
+        return False
+    path = OPTIMIZED_DIR / name
+    return not path.is_symlink() and path.is_file()
+
+
+def _available_image(item: dict, fallback: str) -> dict:
+    result = dict(item)
+    variants = []
+    for part in item.get('srcset', '').split(','):
+        fields = part.strip().split()
+        if len(fields) == 2 and re.fullmatch(r'[1-9][0-9]*w', fields[1]) and _existing_image_url(fields[0]):
+            variants.append((int(fields[1][:-1]), fields[0]))
+    variants.sort()
+    available = [url for url in (item.get('full_url', ''), item.get('thumb_url', '')) if _existing_image_url(url)]
+    available.extend(url for _, url in reversed(variants))
+    if not available:
+        result.update(full_url=fallback, thumb_url=fallback, srcset='', file_missing=True)
+    else:
+        result['full_url'] = item.get('full_url') if _existing_image_url(item.get('full_url')) else available[0]
+        result['thumb_url'] = item.get('thumb_url') if _existing_image_url(item.get('thumb_url')) else (variants[0][1] if variants else available[0])
+        result['srcset'] = ', '.join(f'{url} {width}w' for width, url in variants)
+        result['file_missing'] = False
+    return result
+
+
 def load_gallery_images(lang: str) -> list[dict]:
     manifest = load_manifest()
     result = []
@@ -418,13 +283,14 @@ def load_gallery_images(lang: str) -> list[dict]:
         section_data = manifest.get(key)
         main_image = _get_main_image(section_data)
         if main_image:
+            main_image = _available_image(main_image, slot["src"])
             result.append(
                 {
                     "slot": key,
                     "src": _versioned_url(main_image.get("thumb_url", main_image.get("full_url", slot["src"])), main_image.get("created_at")),
                     "full": _versioned_url(main_image.get("full_url", slot["src"]), main_image.get("created_at")),
                     "srcset": _versioned_srcset(main_image.get("srcset", ""), main_image.get("created_at")),
-                    "alt": main_image.get("title_ar") if lang == "ar" else main_image.get("title_de"),
+                    "alt": (main_image.get("title_ar") if lang == "ar" else main_image.get("title_de")) or I18N[lang][slot["label_key"]],
                 }
             )
         else:
@@ -446,12 +312,15 @@ def get_gallery_groups(lang: str) -> dict[str, list[dict]]:
     for slot in GALLERY_SLOTS:
         key = slot["key"]
         section_data = manifest.get(key, {})
-        images = section_data.get("images", [])
+        images = [_available_image(img, slot["src"]) for img in section_data.get("images", [])]
+        images = [img for img in images if not img["file_missing"]]
+        main_id = section_data.get("main_image_id")
+        images.sort(key=lambda img: img.get("id") != main_id)
         if images:
             groups[key] = [
                 {
                     "full": _versioned_url(img.get("full_url", slot["src"]), img.get("created_at")),
-                    "alt": img.get("title_ar") if lang == "ar" else img.get("title_de") or I18N[lang][slot["label_key"]],
+                    "alt": (img.get("title_ar") if lang == "ar" else img.get("title_de")) or I18N[lang][slot["label_key"]],
                 }
                 for img in images
             ]
@@ -466,7 +335,9 @@ def get_section_gallery(lang: str, section: str) -> list[dict]:
     images = section_data.get("images", [])
     main_id = section_data.get("main_image_id")
     rows = []
+    fallback = next(slot["src"] for slot in GALLERY_SLOTS if slot["key"] == section)
     for img in images:
+        img = _available_image(img, fallback)
         rows.append(
             {
                 "id": img.get("id"),
@@ -474,15 +345,22 @@ def get_section_gallery(lang: str, section: str) -> list[dict]:
                 "full": _versioned_url(img.get("full_url", ""), img.get("created_at")),
                 "alt": img.get("title_ar") if lang == "ar" else img.get("title_de"),
                 "is_main": img.get("id") == main_id,
+                "file_missing": img.get("file_missing", False),
             }
         )
     return rows
 
 
-def verify_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
-    valid_user = secrets.compare_digest(credentials.username, ADMIN_USER)
-    valid_pass = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+def verify_admin(request: Request, credentials: HTTPBasicCredentials = Depends(security)) -> str:
+    if not ADMIN_PASSWORD:
+        raise HTTPException(503, "Administration is not configured")
+    key = ('admin', request.client.host if request.client else 'unknown')
+    if not limiter.allow(key, 5, 300, record=False):
+        raise HTTPException(429, "Too many login attempts", headers={"Retry-After": "300"})
+    valid_user = secrets.compare_digest(credentials.username.encode(), ADMIN_USER.encode())
+    valid_pass = secrets.compare_digest(credentials.password.encode(), ADMIN_PASSWORD.encode())
     if not (valid_user and valid_pass):
+        limiter.allow(key, 5, 300)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
@@ -492,18 +370,17 @@ def verify_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
 
 
 def _delete_optimized_files(item: dict) -> None:
-    urls = [item.get("full_url", ""), item.get("thumb_url", ""), *[u.strip().split(" ")[0] for u in item.get("srcset", "").split(",") if u.strip()]]
-    seen = set()
-    for url in urls:
-        if not url.startswith("/uploads/optimized/"):
-            continue
-        name = url.split("/uploads/optimized/")[-1]
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        fp = OPTIMIZED_DIR / name
-        if fp.exists() and fp.is_file():
-            fp.unlink()
+    """Archive removed images outside the public mount, retaining rollback files."""
+    urls = [item.get('full_url', ''), item.get('thumb_url', '')]
+    urls.extend(part.strip().split()[0] for part in item.get('srcset', '').split(',') if part.strip())
+    files = {OPTIMIZED_DIR / urlsplit(url).path.rsplit('/', 1)[-1]
+             for url in urls if _existing_image_url(url)}
+    if not files:
+        return
+    archive = DATA_DIR / 'deleted-images' / uuid.uuid4().hex
+    archive.mkdir(parents=True, mode=0o700)
+    for path in files:
+        os.replace(path, archive / path.name)
 
 
 def _render_admin_page(request: Request, user: str, selected_section: str = "reception", upload_success: str | None = None, upload_errors: list[str] | None = None) -> object:
@@ -530,7 +407,11 @@ def process_upload_image(file: UploadFile, section: str, title_de: str | None = 
     if file.content_type not in ALLOWED_TYPES:
         raise ValueError(f"Unsupported content type for {file.filename}")
 
-    content = file.file.read()
+    if section not in SLOT_KEYS:
+        raise ValueError("Invalid section")
+    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+        raise ValueError(f"Image exceeds {MAX_UPLOAD_MB}MB")
+    content = file.file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
         raise ValueError(f"{file.filename} exceeds {MAX_UPLOAD_MB}MB")
 
@@ -543,12 +424,14 @@ def process_upload_image(file: UploadFile, section: str, title_de: str | None = 
 
     try:
         image = Image.open(BytesIO(content))
+        if image.width * image.height > 25_000_000:
+            raise ValueError("Image dimensions exceed 25 megapixels")
         image = ImageOps.exif_transpose(image).convert("RGB")
     except Exception as exc:
         raise ValueError(f"Invalid image file: {file.filename}") from exc
 
     stem = sanitize_stem(file.filename or "image")
-    unique = f"{stem}-{int(time.time())}"
+    unique = f"{stem}-{uuid.uuid4().hex}"
 
     width, height = image.size
     generated = []
@@ -556,7 +439,7 @@ def process_upload_image(file: UploadFile, section: str, title_de: str | None = 
         if size > width:
             continue
         new_height = int((size / width) * height)
-        resized = image.resize((size, new_height))
+        resized = image.resize((size, new_height), Image.Resampling.LANCZOS)
         out_name = f"{unique}-{size}.webp"
         out_path = OPTIMIZED_DIR / out_name
         resized.save(out_path, "WEBP", quality=82, method=6)
@@ -606,7 +489,7 @@ def _seo_context(request: Request, lang: str, noindex: bool = False) -> dict:
     canonical = f"{SITE_URL}{path}"
     return {
         "meta_description": SEO_META[lang][page_key],
-        "canonical_url": canonical,
+        "canonical_url": f"{canonical}?lang={lang}",
         "alt_de": f"{canonical}?lang=de",
         "alt_ar": f"{canonical}?lang=ar",
         "meta_robots": "noindex, nofollow" if noindex else "index, follow",
@@ -637,21 +520,16 @@ def _slugify(value: str) -> str:
 
 
 def load_articles() -> list[dict]:
-    if not ARTICLES_PATH.exists():
-        return []
-    try:
-        raw = json.loads(ARTICLES_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
+    raw = storage.read_json(ARTICLES_PATH, [])
     if not isinstance(raw, list):
-        return []
+        raise storage.StorageError("Invalid article store")
     items = [x for x in raw if isinstance(x, dict)]
     items.sort(key=lambda x: x.get("updated_at", x.get("created_at", 0)), reverse=True)
     return items
 
 
 def save_articles(items: list[dict]) -> None:
-    ARTICLES_PATH.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    storage.write_json(ARTICLES_PATH, items)
 
 
 def get_article(slug: str) -> dict | None:
@@ -662,18 +540,20 @@ def get_article(slug: str) -> dict | None:
 
 
 def _article_public(item: dict, lang: str) -> dict:
-    title = item.get("title_ar") if lang == "ar" else item.get("title_de")
-    excerpt = item.get("excerpt_ar") if lang == "ar" else item.get("excerpt_de")
-    content = item.get("content_ar") if lang == "ar" else item.get("content_de")
+    content_lang = lang if item.get(f"title_{lang}") and item.get(f"content_{lang}") else "de"
+    title = item.get(f"title_{content_lang}")
+    excerpt = item.get(f"excerpt_{content_lang}")
+    content = item.get(f"content_{content_lang}")
     return {
         "slug": item.get("slug", ""),
         "title": title or item.get("title_de", ""),
         "excerpt": excerpt or "",
         "content": content or "",
         "cover_url": item.get("cover_url", ""),
-        "category": item.get("category", "General"),
+        "category": (("عام" if lang == "ar" else "Allgemein") if item.get("category", "General") == "General" else item["category"]),
         "updated_at": item.get("updated_at", item.get("created_at", 0)),
-        "reading_minutes": max(1, int((len((content or "").split())) / 180)),
+        "reading_minutes": max(1, math.ceil(len((content or "").split()) / 180)),
+        "content_lang": content_lang,
     }
 
 
@@ -689,6 +569,7 @@ def article_admin_ctx(request: Request, user: str, message: str | None = None, e
         "admin_error": error,
         "articles_admin": load_articles(),
         "edit_article": edit_article,
+        "original_slug": edit_article.get("slug", "") if edit_article else "",
     })
     return ctx
 
@@ -701,6 +582,12 @@ def base_context(request: Request, noindex: bool = False) -> dict:
         "address": ADDRESS,
         "phone_landline": PHONE_LANDLINE,
         "phone_mobile": PHONE_MOBILE,
+        "phone_tel": PHONE_TEL,
+        "opening_hours": OPENING_HOURS_AR if lang == "ar" else OPENING_HOURS_DE,
+        "csrf_token": request.state.csrf_token,
+        "contact_enabled": contact.configured(),
+        "max_upload_mb": MAX_UPLOAD_MB,
+        "max_upload_files": MAX_UPLOAD_FILES,
         "lang": lang,
         "is_rtl": lang == "ar",
         "t": I18N[lang],
@@ -717,7 +604,16 @@ def base_context(request: Request, noindex: bool = False) -> dict:
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots_txt() -> str:
-    return f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}/sitemap.xml\n"
+    return f"User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: {SITE_URL}/sitemap.xml\n"
+
+
+@app.get("/healthz")
+def health():
+    load_manifest()
+    load_articles()
+    if not os.access(DATA_DIR, os.W_OK):
+        return JSONResponse({"status": "unavailable"}, status_code=503)
+    return {"status": "ok"}
 
 
 @app.get("/sitemap.xml")
@@ -727,7 +623,7 @@ def sitemap_xml() -> Response:
     for page in pages:
         for lang in ("de", "ar"):
             loc = f"{SITE_URL}{page}?lang={lang}"
-            lines.extend(["  <url>", f"    <loc>{loc}</loc>", "    <changefreq>weekly</changefreq>", "    <priority>0.8</priority>", "  </url>"])
+            lines.extend(["  <url>", f"    <loc>{escape(loc)}</loc>", "    <changefreq>weekly</changefreq>", "    <priority>0.8</priority>", "  </url>"])
     for article in load_articles():
         if article.get("status") != "published":
             continue
@@ -735,8 +631,10 @@ def sitemap_xml() -> Response:
         if not slug:
             continue
         for lang in ("de", "ar"):
+            if not article.get(f"title_{lang}") or not article.get(f"content_{lang}"):
+                continue
             loc = f"{SITE_URL}/articles/{slug}?lang={lang}"
-            lines.extend(["  <url>", f"    <loc>{loc}</loc>", "    <changefreq>monthly</changefreq>", "    <priority>0.7</priority>", "  </url>"])
+            lines.extend(["  <url>", f"    <loc>{escape(loc)}</loc>", "    <changefreq>monthly</changefreq>", "    <priority>0.7</priority>", "  </url>"])
     lines.append('</urlset>')
     return Response(content="\n".join(lines), media_type="application/xml")
 
@@ -760,6 +658,30 @@ def kontakt(request: Request):
     return templates.TemplateResponse(request, "kontakt.html", base_context(request))
 
 
+
+
+@app.post("/kontakt", dependencies=[Depends(verify_csrf)])
+def contact_submit(request: Request, name: str = Form("", max_length=120),
+                   email: str = Form("", max_length=254),
+                   message: str = Form("", max_length=10000),
+                   website: str = Form("", max_length=200)):
+    ctx = base_context(request)
+    lang = ctx['lang']
+    def failed(key, code):
+        ctx.update(contact_error=I18N[lang][key], form_values={"name": name, "email": email, "message": message})
+        return templates.TemplateResponse(request, "kontakt.html", ctx, status_code=code)
+    if not contact.configured():
+        return failed('contact_unavailable', 503)
+    client = request.client.host if request.client else 'unknown'
+    if not limiter.allow(('contact', client), 5, 600):
+        return failed('contact_rate_limit', 429)
+    name, email, message = name.strip(), email.strip(), message.strip()
+    if website or not name or '\n' in name or '\r' in name or not contact.valid_email(email) or not message:
+        return failed('contact_invalid', 422)
+    if not contact.deliver(name, email, message):
+        return failed('contact_failed', 502)
+    ctx['success'] = True
+    return templates.TemplateResponse(request, "kontakt.html", ctx)
 
 
 @app.get("/articles")
@@ -790,11 +712,12 @@ def article_detail(request: Request, slug: str):
         "@type": "Article",
         "headline": article["title"],
         "description": article["excerpt"],
-        "datePublished": datetime.utcfromtimestamp(raw.get("created_at", int(time.time()))).isoformat() + "Z",
-        "dateModified": datetime.utcfromtimestamp(raw.get("updated_at", raw.get("created_at", int(time.time())))).isoformat() + "Z",
+        "datePublished": datetime.fromtimestamp(raw.get("created_at", int(time.time())), timezone.utc).isoformat(),
+        "dateModified": datetime.fromtimestamp(raw.get("updated_at", raw.get("created_at", int(time.time()))), timezone.utc).isoformat(),
         "author": {"@type": "Person", "name": "M.Sc. Abdulaziz Jaghsi"},
         "publisher": {"@type": "Dentist", "name": CLINIC_NAME, "url": SITE_URL},
-        "mainEntityOfPage": canonical,
+        "mainEntityOfPage": f"{canonical}?lang={article['content_lang']}",
+        "inLanguage": article["content_lang"],
     }
     if article.get("cover_url"):
         article_schema["image"] = f"{SITE_URL}{article['cover_url']}"
@@ -803,10 +726,12 @@ def article_detail(request: Request, slug: str):
         "article": article,
         "related_articles": [a for a in list_published_articles(lang) if a["slug"] != slug][:3],
         "meta_description": article["excerpt"] or ctx.get("meta_description"),
-        "canonical_url": canonical,
+        "canonical_url": f"{canonical}?lang={lang}",
         "alt_de": f"{canonical}?lang=de",
         "alt_ar": f"{canonical}?lang=ar",
         "article_schema": article_schema,
+        "alt_ar": f"{canonical}?lang=ar" if raw.get("title_ar") and raw.get("content_ar") else None,
+        "meta_robots": "index, follow" if article["content_lang"] == lang else "noindex, follow",
     })
     return templates.TemplateResponse(request, "article_detail.html", ctx)
 
@@ -816,17 +741,20 @@ def admin_articles_page(request: Request, user: str = Depends(verify_admin)):
     return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user))
 
 
-@app.post("/admin/articles")
+@app.post("/admin/articles", dependencies=[Depends(verify_csrf)])
+@storage.serialized("articles")
 def admin_articles_save(
     request: Request,
-    slug: str = Form(""),
-    title_de: str = Form(""),
-    title_ar: str = Form(""),
-    excerpt_de: str = Form(""),
-    excerpt_ar: str = Form(""),
-    content_de: str = Form(""),
-    content_ar: str = Form(""),
-    category: str = Form("General"),
+    slug: str = Form("", max_length=160),
+    original_slug: str = Form("", max_length=160),
+    revision: str = Form(""),
+    title_de: str = Form("", max_length=200),
+    title_ar: str = Form("", max_length=200),
+    excerpt_de: str = Form("", max_length=1000),
+    excerpt_ar: str = Form("", max_length=1000),
+    content_de: str = Form("", max_length=100000),
+    content_ar: str = Form("", max_length=100000),
+    category: str = Form("General", max_length=100),
     status: str = Form("draft"),
     user: str = Depends(verify_admin),
 ):
@@ -838,12 +766,28 @@ def admin_articles_save(
     clean_slug = _slugify(slug or title_de)
     now = int(time.time())
 
-    existing = None
-    for it in items:
-        if it.get("slug") == clean_slug:
-            existing = it
-            break
+    def invalid(message):
+        submitted = {"slug": slug, "title_de": title_de, "title_ar": title_ar,
+                     "excerpt_de": excerpt_de, "excerpt_ar": excerpt_ar,
+                     "content_de": content_de, "content_ar": content_ar,
+                     "category": category, "status": status, "revision": revision}
+        ctx = article_admin_ctx(request, user, error=message, edit_article=submitted)
+        ctx['original_slug'] = original_slug
+        return templates.TemplateResponse(request, "admin_articles.html", ctx, status_code=409)
 
+    existing = next((it for it in items if it.get('slug') == original_slug), None) if original_slug else None
+    if original_slug and not existing:
+        return invalid("The original article was not found. Reload before saving.")
+    if original_slug and clean_slug != original_slug:
+        return invalid("Published links are stable. Keep the original slug when editing.")
+    if existing and revision != str(existing.get('revision', existing.get('updated_at', ''))):
+        return invalid("This article changed since you opened it. Reload before saving.")
+    if not existing and any(it.get('slug') == clean_slug for it in items):
+        return invalid("This slug already exists. Choose another slug or edit that article.")
+    if status == 'published' and not content_de.strip():
+        return invalid("German content is required before publishing.")
+    if status == 'published' and bool(title_ar.strip()) != bool(content_ar.strip()):
+        return invalid("Provide both Arabic title and Arabic content, or leave both empty.")
     if existing:
         existing.update({
             "title_de": title_de, "title_ar": title_ar.strip(),
@@ -851,7 +795,7 @@ def admin_articles_save(
             "content_de": content_de.strip(), "content_ar": content_ar.strip(),
             "category": category.strip() or "General",
             "status": "published" if status == "published" else "draft",
-            "updated_at": now,
+            "updated_at": now, "revision": uuid.uuid4().hex,
         })
         msg = "Article updated."
     else:
@@ -867,7 +811,7 @@ def admin_articles_save(
             "status": "published" if status == "published" else "draft",
             "cover_url": "",
             "created_at": now,
-            "updated_at": now,
+            "updated_at": now, "revision": uuid.uuid4().hex,
         })
         msg = "Article created."
 
@@ -875,7 +819,8 @@ def admin_articles_save(
     return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, message=msg))
 
 
-@app.post("/admin/articles/edit")
+@app.post("/admin/articles/edit", dependencies=[Depends(verify_csrf)])
+@storage.serialized("articles")
 def admin_articles_edit(request: Request, slug: str = Form(""), user: str = Depends(verify_admin)):
     art = get_article(slug)
     if not art:
@@ -883,7 +828,8 @@ def admin_articles_edit(request: Request, slug: str = Form(""), user: str = Depe
     return templates.TemplateResponse(request, "admin_articles.html", article_admin_ctx(request, user, edit_article=art))
 
 
-@app.post("/admin/articles/delete")
+@app.post("/admin/articles/delete", dependencies=[Depends(verify_csrf)])
+@storage.serialized("articles")
 def admin_articles_delete(request: Request, slug: str = Form(""), user: str = Depends(verify_admin)):
     items = load_articles()
     new_items = [a for a in items if a.get("slug") != slug]
@@ -897,7 +843,8 @@ def admin_upload_page(request: Request, section: str = "reception", user: str = 
     return _render_admin_page(request, user=user, selected_section=section)
 
 
-@app.post("/admin/upload-images")
+@app.post("/admin/upload-images", dependencies=[Depends(verify_csrf)])
+@storage.serialized("manifest")
 def admin_upload_images(
     request: Request,
     section: str = Form("reception"),
@@ -911,7 +858,11 @@ def admin_upload_images(
     errors = []
 
     if section not in SLOT_KEYS:
-        errors.append("Invalid section selected.")
+        return _render_admin_page(request, user, upload_errors=["Invalid section selected."])
+    if len(images) > MAX_UPLOAD_FILES or sum(image.size or 0 for image in images) > MAX_BATCH_BYTES:
+        return _render_admin_page(request, user, selected_section=section,
+                                  upload_errors=[f"Upload up to {MAX_UPLOAD_FILES} files and 30 MB in total."])
+
 
     for image in images:
         if not image.filename:
@@ -920,7 +871,8 @@ def admin_upload_images(
             item = process_upload_image(image, section=section, title_de=title_de or None, title_ar=title_ar or None)
             created.append(item)
         except Exception as exc:  # noqa: BLE001
-            errors.append(str(exc))
+            logger.warning("Image processing failed (%s)", type(exc).__name__)
+            errors.append("Image could not be processed. Check its format, dimensions and size.")
 
     if created:
         section_data = manifest.get(section, {"main_image_id": None, "images": []})
@@ -941,7 +893,8 @@ def admin_upload_images(
     )
 
 
-@app.post("/admin/upload-images/set-main")
+@app.post("/admin/upload-images/set-main", dependencies=[Depends(verify_csrf)])
+@storage.serialized("manifest")
 def admin_set_main_image(
     request: Request,
     section: str = Form("reception"),
@@ -964,7 +917,8 @@ def admin_set_main_image(
     return _render_admin_page(request, user=user, selected_section=section, upload_success=f"Main image updated for section: {section}.")
 
 
-@app.post("/admin/upload-images/delete-image")
+@app.post("/admin/upload-images/delete-image", dependencies=[Depends(verify_csrf)])
+@storage.serialized("manifest")
 def admin_delete_single_image(
     request: Request,
     section: str = Form("reception"),
@@ -988,8 +942,6 @@ def admin_delete_single_image(
     if not deleted_item:
         return _render_admin_page(request, user=user, selected_section=section, upload_errors=["Image not found."])
 
-    _delete_optimized_files(deleted_item)
-
     if kept:
         section_data["images"] = kept
         if section_data.get("main_image_id") == image_id:
@@ -999,10 +951,12 @@ def admin_delete_single_image(
         manifest.pop(section, None)
 
     save_manifest(manifest)
+    _delete_optimized_files(deleted_item)
     return _render_admin_page(request, user=user, selected_section=section, upload_success=f"Deleted one image from section: {section}.")
 
 
-@app.post("/admin/upload-images/delete-section")
+@app.post("/admin/upload-images/delete-section", dependencies=[Depends(verify_csrf)])
+@storage.serialized("manifest")
 def admin_delete_section_image(
     request: Request,
     section: str = Form("reception"),
@@ -1014,9 +968,9 @@ def admin_delete_section_image(
 
     section_data = manifest.pop(section, None)
     if section_data:
+        save_manifest(manifest)
         for img in section_data.get("images", []):
             _delete_optimized_files(img)
-        save_manifest(manifest)
         msg = f"Deleted all images for section: {section}."
     else:
         msg = f"No uploaded images found for section: {section}."
@@ -1024,19 +978,13 @@ def admin_delete_section_image(
     return _render_admin_page(request, user=user, selected_section=section, upload_success=msg)
 
 
-@app.post("/admin/upload-images/delete-all")
+@app.post("/admin/upload-images/delete-all", dependencies=[Depends(verify_csrf)])
+@storage.serialized("manifest")
 def admin_delete_all_images(request: Request, user: str = Depends(verify_admin)):
     manifest = load_manifest()
+    save_manifest({})
     for section_data in manifest.values():
         for img in section_data.get("images", []):
             _delete_optimized_files(img)
-
-    if OPTIMIZED_DIR.exists():
-        for fp in OPTIMIZED_DIR.iterdir():
-            if fp.is_file():
-                fp.unlink()
-
-    if MANIFEST_PATH.exists():
-        MANIFEST_PATH.unlink()
 
     return _render_admin_page(request, user=user, upload_success="Deleted all uploaded gallery images.")

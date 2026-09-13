@@ -1,0 +1,127 @@
+[
+  {
+    "path": ".github/workflows/ci.yml",
+    "before": "e845ce024b0cd130b731b6673322367c47e817cf6786fc83b55dce59461bd24b",
+    "after": "9a95b76f5abf5a222b76af83e9f3a23ea437631e3c9658ffbcf44f6926282ec6"
+  },
+  {
+    "path": ".gitignore",
+    "before": "bffd1b2e3b0314f2ad458fa3204c787accc6ec6c5d6f6e4f564502d0b36e5cab",
+    "after": "0028ac776e6e58cd7e70674b990ab24a9e430d06e959e0d6dfceac883fbb4045"
+  },
+  {
+    "path": "README.md",
+    "before": "46c3e7e25cd5083bce125a845a9ef294cef74b6b45dd871246d69078d30c44e6",
+    "after": "5ae6563feced4a09d5b8f1683be6c8c31d04f7de8831f76da1a285cad1f91a01"
+  },
+  {
+    "path": "backend/app/contact.py",
+    "before": null,
+    "after": "0956a4249b546c76d84cb0a4aee17c979b787bf7986b7cd2eff9bd176e5be671"
+  },
+  {
+    "path": "backend/app/main.py",
+    "before": "211150c9a8edbacba190cb77642a6706052171203125511b01129b95e539531e",
+    "after": "1f8e288864c967e0f14474f198990833fd3da7f04601285fc80261d38b270cf4"
+  },
+  {
+    "path": "backend/app/security.py",
+    "before": null,
+    "after": "c3d5fc3f1cfff391240127173a921d3a8e249f4196ee79d1d3bbbad4bdb56071"
+  },
+  {
+    "path": "backend/app/static/logo-small.webp",
+    "before": null,
+    "after": "b43a4c9c7b8f504470444914ef40c33d194e190621d791b00e3fcf69d5d0ad7d"
+  },
+  {
+    "path": "backend/app/static/styles.css",
+    "before": "269369fd6a542b02d3127dfe7b0728c835541e00d5e047b419ef67d3de562228",
+    "after": "7cae0f621da66b6ba98b0c312330bd227172c2b49b90fc364b394c2b4f533b64"
+  },
+  {
+    "path": "backend/app/storage.py",
+    "before": null,
+    "after": "9c5f061fa1531f3f7494d737989d12d5e00f9607e938e5445e8d7e44aa530eb5"
+  },
+  {
+    "path": "backend/app/templates/admin_articles.html",
+    "before": "51208d2612b8e25ec3fb944be573dcccbbe62ad28043fc055ab5343f067d7b7b",
+    "after": "e743d891a70b75a23892f90766e9b7eaf3e8675b7594676763ad26e2bc544bb2"
+  },
+  {
+    "path": "backend/app/templates/admin_upload_images.html",
+    "before": "e5e276866e24085a276d0adefce563f6fa02c1e786afc53714a846d06711fdf8",
+    "after": "e8952a28ffe739ec7630f80a38337a0913835bafe5671dd93fc0730ad8a779db"
+  },
+  {
+    "path": "backend/app/templates/article_detail.html",
+    "before": "4b0d9f9d8b944c89431b484b107d793d67236ac56a3d8b8876758f2def34a7c6",
+    "after": "7bb3e90331021a28cba1a6873fa7b2b4c21ad86ff70925fd8c9868ce23faa055"
+  },
+  {
+    "path": "backend/app/templates/articles.html",
+    "before": "33efd894a19ec6dcec1a63fae04b01edd23f40a7221e555bc02ce49f29a55070",
+    "after": "6b3be72cae0e87128c2fd51daec26b23410119acfddd88c222252e79957e8899"
+  },
+  {
+    "path": "backend/app/templates/base.html",
+    "before": "ba9af9753bf15827e3745fdc12f98912ab760077a55640715f5fac6e43dbc8d6",
+    "after": "6c3488764543c6ff48c917ad7c0d642a5806b14b72403e6aaa566a3e6476d8b7"
+  },
+  {
+    "path": "backend/app/templates/index.html",
+    "before": "152ec2e94948b1c018ca8dadfce6665c8ebaf503a984d2b34a19eee66694e6da",
+    "after": "b310433a1e03c4fb7707c0470bf0c3059db138b0b5ef17be58161c3d9fb22748"
+  },
+  {
+    "path": "backend/app/templates/kontakt.html",
+    "before": "cb25463083e0adec0612c2f8229bbaa0ce6959a713f3cefbd3bf3dbf33250cd4",
+    "after": "8e5b0cfd846e2685bb93b7cbc39cff8be33b8e1c9aa918217d56a6f7e458f23e"
+  },
+  {
+    "path": "backend/app/translations.py",
+    "before": null,
+    "after": "645f7399b5eb4df44cb7947bc8736f89e8478c09f084369280c88d8d6b6a64c6"
+  },
+  {
+    "path": "deploy/RELEASE.md",
+    "before": null,
+    "after": "44b8938098c178fff73f00c290fda29c58ae9c71ff98ec1cd678f21be0562f12"
+  },
+  {
+    "path": "deploy/nginx-zahnarzt.conf",
+    "before": null,
+    "after": "bc41f130ecad3ce648963041a6117cd3b68e2e3c29a1a5114adfc9bc06debd88"
+  },
+  {
+    "path": "deploy/zahnarzt-backup.service",
+    "before": null,
+    "after": "bec3dd63ce34ba03f50c51726328f31e2aa571d09517dcd4da3f7e008464c66b"
+  },
+  {
+    "path": "deploy/zahnarzt-backup.timer",
+    "before": null,
+    "after": "5199861afcb34282f36645cfc6492fb0ce85976399fccb3c6641a6261b5fe6f6"
+  },
+  {
+    "path": "pyproject.toml",
+    "before": "c1ca0c2d708e09424910501727b08f4d62e81aad3d71d7ab4146db3db19a33bd",
+    "after": "f4c183c7322b693755cc6450ba2c180ad408d3778a0c51b1e32f92597bcdd593"
+  },
+  {
+    "path": "scripts/content_backup.py",
+    "before": null,
+    "after": "080f0b0570aa397db51e0377d3b7499910a17feb82419773a2487c0d9e3e8d0a"
+  },
+  {
+    "path": "tests/test_import_basic.py",
+    "before": "ac6b262401e20638ac34a9314243af821b80be221c517001d3300dbf6ffbd011",
+    "after": "cca7d426289f6a473477b6d69829ab3367b94c1aaa8f0e80c7822951c2541baf"
+  },
+  {
+    "path": "uv.lock",
+    "before": "4b12bec15b593f3ee5c92ee8981fb7036a75f6225d2f1580bceb67a5ff3bbfef",
+    "after": "c125d5f67062b301d758f3d3186df54db06cbe1e290638094e4f5d410cc2d1a1"
+  }
+]

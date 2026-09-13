@@ -10,7 +10,7 @@
 <section class="articles-grid">
   {% for article in articles %}
   <article class="article-card">
-    <div class="article-meta">{{ article.category }} · {{ article.reading_minutes }} min</div>
+    <div class="article-meta">{{ article.category }} · {{ article.reading_minutes }} {{ "دقيقة" if lang == "ar" else "Min." }}</div>
     <h2><a href="/articles/{{ article.slug }}?lang={{ lang }}">{{ article.title }}</a></h2>
     <p>{{ article.excerpt }}</p>
     <a class="link" href="/articles/{{ article.slug }}?lang={{ lang }}">{{ "Mehr lesen" if lang == "de" else "قراءة المزيد" }}</a>
